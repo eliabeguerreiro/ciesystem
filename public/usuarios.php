@@ -2,7 +2,7 @@
 session_start();
 require_once __DIR__ . '/../app/controllers/AuthController.php';
 require_once __DIR__ . '/../app/models/usuario.php';
-require_once __DIR__ . '/../config/database.php';
+// ⚠️ Não é necessário incluir '../config/database.php' aqui — já é carregado pelo usuario.php
 
 $auth = new AuthController();
 if (!$auth->isLoggedIn() || !$auth->isAdmin()) {
@@ -68,13 +68,13 @@ if (isset($_GET['editar'])) {
     <h3><?= $editar ? 'Editar Usuário' : 'Novo Usuário' ?></h3>
     <form method="POST">
         <?php if ($editar): ?>
-            <input type="hidden" name="id" value="<?= $editar['id'] ?>">
+            <input type="hidden" name="id" value="<?= htmlspecialchars($editar['id']) ?>">
         <?php endif; ?>
         <p>
-            <input type="text" name="nome" placeholder="Nome" value="<?= $editar['nome'] ?? '' ?>" required>
+            <input type="text" name="nome" placeholder="Nome" value="<?= htmlspecialchars($editar['nome'] ?? '') ?>" required>
         </p>
         <p>
-            <input type="email" name="email" placeholder="E-mail" value="<?= $editar['email'] ?? '' ?>" required>
+            <input type="email" name="email" placeholder="E-mail" value="<?= htmlspecialchars($editar['email'] ?? '') ?>" required>
         </p>
         <p>
             <input type="password" name="senha" placeholder="<?= $editar ? 'Deixe em branco para não alterar' : 'Senha' ?>">
@@ -103,7 +103,7 @@ if (isset($_GET['editar'])) {
             <tr>
                 <td><?= htmlspecialchars($u['nome']) ?></td>
                 <td><?= htmlspecialchars($u['email']) ?></td>
-                <td><?= $u['tipo'] ?></td>
+                <td><?= htmlspecialchars($u['tipo']) ?></td>
                 <td>
                     <a href="?editar=<?= $u['id'] ?>">Editar</a> |
                     <a href="?deletar=<?= $u['id'] ?>" onclick="return confirm('Tem certeza?')">Excluir</a>
