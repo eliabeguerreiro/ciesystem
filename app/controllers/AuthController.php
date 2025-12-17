@@ -1,8 +1,10 @@
 <?php
 // app/controllers/AuthController.php
+
 session_start();
-require_once '../models/Usuario.php';
-require_once '../config/database.php';
+
+require_once __DIR__ . '/../config/database.php';
+require_once __DIR__ . '/../models/usuario.php';
 
 class AuthController {
     private $usuario;
@@ -38,4 +40,3 @@ class AuthController {
         return isset($_SESSION['user_tipo']) && $_SESSION['user_tipo'] === 'admin';
     }
 }
-?>

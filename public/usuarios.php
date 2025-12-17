@@ -1,7 +1,7 @@
 <?php
-require_once '../app/controllers/AuthController.php';
-require_once '../models/Usuario.php';
-require_once '../config/database.php';
+require_once __DIR__ . '/../app/controllers/AuthController.php';
+require_once __DIR__ . '/../app/models/usuario.php';
+require_once __DIR__ . '/../config/database.php';
 
 $auth = new AuthController();
 if (!$auth->isLoggedIn() || !$auth->isAdmin()) {

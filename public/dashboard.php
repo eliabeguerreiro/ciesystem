@@ -1,5 +1,5 @@
 <?php
-require_once '../app/controllers/AuthController.php';
+require_once __DIR__ . '/../app/controllers/AuthController.php';
 $auth = new AuthController();
 
 if (!$auth->isLoggedIn()) {

@@ -1,0 +1,8 @@
+Options -Indexes
+DirectoryIndex index.php login.php
+
+# Redireciona / para login.php (opcional)
+RewriteEngine On
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^$ login.php [L]

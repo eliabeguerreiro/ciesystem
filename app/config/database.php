@@ -1,7 +1,7 @@
 <?php
 // config/database.php
 class Database {
-    private $host = '127.0.0.1';
+    private $host = '127.0.0.1:3333';
     private $db_name = 'ciesytem';
     private $username = 'root';      // ajuste conforme seu ambiente
     private $password = 'hants12';          // ajuste conforme seu ambiente
