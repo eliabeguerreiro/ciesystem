@@ -47,7 +47,7 @@ if ($_POST) {
             $carteirinha->estudante_id = $estudante_id;
 
             if ($carteirinha->criar()) {
-                // Obter o ID da CIE recém-criada
+                // Obter o ID e código da CIE recém-criada
                 $stmt = $db->prepare("SELECT id, cie_codigo FROM carteirinhas WHERE estudante_id = ? ORDER BY id DESC LIMIT 1");
                 $stmt->execute([$estudante_id]);
                 $resultado = $stmt->fetch();
@@ -64,6 +64,17 @@ if ($_POST) {
                     if (!empty($_POST['anexar_pagamento']) && !empty($_FILES['comprovante_pagamento']['name'][0])) {
                         $carteirinha->salvarDocumentos($_FILES['comprovante_pagamento'], 'pagamento');
                     }
+
+                    // === LOG: CIE emitida ===
+                    require_once __DIR__ . '/../app/models/Log.php';
+                    $log = new Log($db);
+                    $log->registrar(
+                        $_SESSION['user_id'],
+                        'emitiu_cie',
+                        "Estudante ID: {$estudante_id}, Código CIE: {$codigoGerado}",
+                        $carteirinha->id,
+                        'carteirinhas'
+                    );
 
                     $sucesso = "CIE emitida com sucesso!";
                 } else {

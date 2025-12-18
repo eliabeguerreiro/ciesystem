@@ -25,6 +25,16 @@ if ($_GET) {
     if (isset($_GET['vencida'])) {
         $carteirinha->id = (int)$_GET['vencida'];
         if ($carteirinha->atualizarSituacao('vencida')) {
+            // === LOG: CIE marcada como vencida ===
+            require_once __DIR__ . '/../app/models/Log.php';
+            $log = new Log($db);
+            $log->registrar(
+                $_SESSION['user_id'],
+                'venceu_cie',
+                "CIE ID: {$carteirinha->id}",
+                $carteirinha->id,
+                'carteirinhas'
+            );
             $sucesso = "CIE marcada como vencida.";
         } else {
             $erro = "Erro ao atualizar CIE.";
@@ -32,6 +42,16 @@ if ($_GET) {
     } elseif (isset($_GET['cancelar'])) {
         $carteirinha->id = (int)$_GET['cancelar'];
         if ($carteirinha->atualizarSituacao('cancelada')) {
+            // === LOG: CIE cancelada ===
+            require_once __DIR__ . '/../app/models/Log.php';
+            $log = new Log($db);
+            $log->registrar(
+                $_SESSION['user_id'],
+                'cancelou_cie',
+                "CIE ID: {$carteirinha->id}",
+                $carteirinha->id,
+                'carteirinhas'
+            );
             $sucesso = "CIE cancelada.";
         } else {
             $erro = "Erro ao cancelar CIE.";
