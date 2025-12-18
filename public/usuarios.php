@@ -2,7 +2,6 @@
 session_start();
 require_once __DIR__ . '/../app/controllers/AuthController.php';
 require_once __DIR__ . '/../app/models/usuario.php';
-// ⚠️ Não é necessário incluir '../config/database.php' aqui — já é carregado pelo usuario.php
 
 $auth = new AuthController();
 if (!$auth->isLoggedIn() || !$auth->isAdmin()) {
