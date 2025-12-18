@@ -49,11 +49,13 @@ if ($_POST) {
         }
     }
 
-    // ===== EDIÇÃO =====
+    // ================================
+    // EDIÇÃO
+    // ================================
     if (isset($_POST['id'])) {
         $estudante->id = $_POST['id'];
         $registroAtual = $estudante->buscarPorId($estudante->id);
-
+        
         // Se foi feito upload de nova foto → deleta a antiga
         if ($uploadFoto !== null) {
             if (!empty($registroAtual['foto'])) {
@@ -61,22 +63,45 @@ if ($_POST) {
             }
             $estudante->foto = $uploadFoto;
         } else {
-            // Mantém a foto existente
             $estudante->foto = $registroAtual['foto'] ?? null;
         }
 
         if (empty($erro)) {
             if ($estudante->atualizar()) {
+                // === LOG: Estudante editado ===
+                require_once __DIR__ . '/../app/models/Log.php';
+                $log = new Log($db);
+                $log->registrar(
+                    $_SESSION['user_id'],
+                    'editou_estudante',
+                    "ID: {$estudante->id}, Nome: {$estudante->nome}, Matrícula: {$estudante->matricula}",
+                    $estudante->id,
+                    'estudantes'
+                );
                 $sucesso = "Estudante atualizado com sucesso!";
             } else {
                 $erro = "Erro ao atualizar estudante.";
             }
         }
-    } else {
-        // Novo cadastro
+    } 
+    // ================================
+    // CADASTRO
+    // ================================
+    else {
         $estudante->foto = $uploadFoto;
         if (empty($erro)) {
             if ($estudante->criar()) {
+                // === LOG: Estudante criado ===
+                require_once __DIR__ . '/../app/models/Log.php';
+                $log = new Log($db);
+                $novoId = $db->lastInsertId();
+                $log->registrar(
+                    $_SESSION['user_id'],
+                    'criou_estudante',
+                    "Nome: {$estudante->nome}, Matrícula: {$estudante->matricula}, Curso: {$estudante->curso}",
+                    $novoId,
+                    'estudantes'
+                );
                 $sucesso = "Estudante cadastrado com sucesso!";
                 // Limpa os campos após cadastro
                 foreach ($_POST as $key => $value) $_POST[$key] = '';
@@ -93,7 +118,23 @@ if ($_POST) {
 
 if (isset($_GET['deletar'])) {
     $estudante->id = (int)$_GET['deletar'];
+    $registro = $estudante->buscarPorId($estudante->id);
+    
     if ($estudante->deletar()) {
+        // Deleta a foto associada, se existir
+        if (!empty($registro['foto'])) {
+            $estudanteCtrl->deletarFotoAntiga($registro['foto']);
+        }
+        // === LOG: Estudante excluído ===
+        require_once __DIR__ . '/../app/models/Log.php';
+        $log = new Log($db);
+        $log->registrar(
+            $_SESSION['user_id'],
+            'excluiu_estudante',
+            "ID: {$estudante->id}, Nome: {$registro['nome']}",
+            $estudante->id,
+            'estudantes'
+        );
         $sucesso = "Estudante excluído com sucesso.";
     } else {
         $erro = "Erro ao excluir estudante.";
