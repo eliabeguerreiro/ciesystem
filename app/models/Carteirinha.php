@@ -29,7 +29,7 @@ class Carteirinha {
     // Cria uma nova CIE (sem documentos — eles são salvos separadamente)
     public function criar() {
         $this->cie_codigo = $this->gerarCodigoUnico();
-        $this->data_validade = '2027-03-03'; // data fixa definida por você
+        $this->data_validade = (new DateTime())->modify('+1 year')->format('Y') . '-03-31'; // data fixa definida por você
         $this->situacao = $this->situacao ?? 'ativa';
         
         $query = "INSERT INTO {$this->table} (
