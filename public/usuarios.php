@@ -12,7 +12,13 @@ $database = new Database();
 $db = $database->getConnection();
 $usuario = new Usuario($db);
 
-// Tratamento de formulários
+$erro = '';
+$sucesso = '';
+
+// ================================
+// TRATAMENTO DE FORMULÁRIO (CADASTRO/EDIÇÃO)
+// ================================
+
 if ($_POST) {
     $usuario->nome = $_POST['nome'];
     $usuario->email = $_POST['email'];
@@ -24,20 +30,72 @@ if ($_POST) {
     if (isset($_POST['id'])) {
         // Editar
         $usuario->id = $_POST['id'];
-        $usuario->atualizar();
+        if ($usuario->atualizar()) {
+            // === LOG: Usuário editado ===
+            require_once __DIR__ . '/../app/models/Log.php';
+            $log = new Log($db);
+            $log->registrar(
+                $_SESSION['user_id'],
+                'editou_usuario',
+                "ID: {$usuario->id}, Nome: {$usuario->nome}, Email: {$usuario->email}, Tipo: {$usuario->tipo}",
+                $usuario->id,
+                'usuarios'
+            );
+            header('Location: usuarios.php?sucesso=editado');
+            exit;
+        } else {
+            $erro = "Erro ao atualizar usuário.";
+        }
     } else {
         // Criar
-        $usuario->criar();
+        if ($usuario->criar()) {
+            // === LOG: Usuário criado ===
+            require_once __DIR__ . '/../app/models/Log.php';
+            $log = new Log($db);
+            $novoId = $db->lastInsertId();
+            $log->registrar(
+                $_SESSION['user_id'],
+                'criou_usuario',
+                "Nome: {$usuario->nome}, Email: {$usuario->email}, Tipo: {$usuario->tipo}",
+                $novoId,
+                'usuarios'
+            );
+            header('Location: usuarios.php?sucesso=criado');
+            exit;
+        } else {
+            $erro = "Erro ao criar usuário. E-mail já existe.";
+        }
     }
-    header('Location: usuarios.php');
-    exit;
 }
+
+// ================================
+// EXCLUSÃO
+// ================================
 
 if (isset($_GET['deletar'])) {
     $usuario->id = $_GET['deletar'];
-    $usuario->deletar();
-    header('Location: usuarios.php');
-    exit;
+    
+    // Impedir autoexclusão
+    if ($usuario->id == $_SESSION['user_id']) {
+        $erro = "Você não pode excluir a si mesmo.";
+    } else {
+        if ($usuario->deletar()) {
+            // === LOG: Usuário excluído ===
+            require_once __DIR__ . '/../app/models/Log.php';
+            $log = new Log($db);
+            $log->registrar(
+                $_SESSION['user_id'],
+                'excluiu_usuario',
+                "ID: {$usuario->id}",
+                $usuario->id,
+                'usuarios'
+            );
+            header('Location: usuarios.php?sucesso=excluido');
+            exit;
+        } else {
+            $erro = "Erro ao excluir usuário.";
+        }
+    }
 }
 
 $usuarios = $usuario->listar();
@@ -58,11 +116,30 @@ if (isset($_GET['editar'])) {
         th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
         form { margin: 20px 0; }
         input, select, button { padding: 6px; margin: 4px; }
+        .mensagem { padding: 10px; margin: 10px 0; border-radius: 4px; }
+        .sucesso { background: #e8f5e9; color: #2e7d32; }
+        .erro { background: #ffebee; color: #c62828; }
     </style>
 </head>
 <body>
     <h2>Gerenciar Usuários</h2>
     <a href="dashboard.php">← Voltar</a>
+
+    <?php if (isset($_GET['sucesso'])): ?>
+        <?php
+        $msgs = [
+            'criado' => 'Usuário cadastrado com sucesso!',
+            'editado' => 'Usuário atualizado com sucesso!',
+            'excluido' => 'Usuário excluído com sucesso!'
+        ];
+        $msg = $msgs[$_GET['sucesso']] ?? 'Ação realizada com sucesso.';
+        ?>
+        <div class="mensagem sucesso"><?= htmlspecialchars($msg) ?></div>
+    <?php endif; ?>
+
+    <?php if ($erro): ?>
+        <div class="mensagem erro"><?= htmlspecialchars($erro) ?></div>
+    <?php endif; ?>
 
     <h3><?= $editar ? 'Editar Usuário' : 'Novo Usuário' ?></h3>
     <form method="POST">
