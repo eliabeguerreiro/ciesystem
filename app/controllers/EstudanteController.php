@@ -8,6 +8,16 @@ class EstudanteController {
         $this->estudante = new Estudante($db);
     }
 
+    // Método para deletar foto antiga (antes de substituir)
+    public function deletarFotoAntiga($caminhoRelativo) {
+        if (empty($caminhoRelativo)) return;
+
+        $caminhoAbsoluto = __DIR__ . '/../../public/' . ltrim($caminhoRelativo, '/');
+        if (file_exists($caminhoAbsoluto)) {
+            unlink($caminhoAbsoluto);
+        }
+    }
+
     public function uploadFoto($file) {
         if (!$file || $file['error'] !== UPLOAD_ERR_OK) {
             return null;
@@ -27,7 +37,7 @@ class EstudanteController {
         }
 
         if (move_uploaded_file($file['tmp_name'], $caminhoAbsoluto)) {
-            return 'uploads/fotos/' . $nome; // caminho relativo para salvar no banco
+            return 'uploads/fotos/' . $nome;
         }
         return null;
     }

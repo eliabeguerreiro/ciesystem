@@ -49,11 +49,22 @@ if ($_POST) {
         }
     }
 
-    // Mantém foto existente em edições
+    // ===== EDIÇÃO =====
     if (isset($_POST['id'])) {
         $estudante->id = $_POST['id'];
         $registroAtual = $estudante->buscarPorId($estudante->id);
-        $estudante->foto = $uploadFoto ?: ($registroAtual['foto'] ?? null);
+
+        // Se foi feito upload de nova foto → deleta a antiga
+        if ($uploadFoto !== null) {
+            if (!empty($registroAtual['foto'])) {
+                $estudanteCtrl->deletarFotoAntiga($registroAtual['foto']);
+            }
+            $estudante->foto = $uploadFoto;
+        } else {
+            // Mantém a foto existente
+            $estudante->foto = $registroAtual['foto'] ?? null;
+        }
+
         if (empty($erro)) {
             if ($estudante->atualizar()) {
                 $sucesso = "Estudante atualizado com sucesso!";
