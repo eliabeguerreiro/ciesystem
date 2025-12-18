@@ -20,10 +20,11 @@ if (!$auth->isLoggedIn()) {
     <p>Tipo: <?= $_SESSION['user_tipo'] ?></p>
     
     <?php if ($_SESSION['user_tipo'] === 'admin'): ?>
-        <p><a href="usuarios.php">Gerenciar Usuários</a> (apenas admin)</p>
-        <p><a href="estudantes.php">Gerenciar Estudantes</a></p>
+        <p><a href="usuarios.php">Gerenciar Usuários</a></p>
         <p><a href="emitir_cie.php">Emitir CIE</a></p>
     <?php endif; ?>
+    <p><a href="estudantes.php">Gerenciar Estudantes</a></p>
+    <p><a href="cie_listagem.php">Visualizar CIEs Emitidas</a></p>
     <p><a href="logout.php">Sair</a></p>
 </body>
 </html>
