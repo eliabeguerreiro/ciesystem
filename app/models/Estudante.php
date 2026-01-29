@@ -21,57 +21,61 @@ class Estudante {
     public $situacao_academica;
     public $email;
     public $telefone;
+    public $status_validacao; 
 
     public function __construct($db) {
         $this->conn = $db;
     }
 
     // Cria novo estudante
-    public function criar() {
-        $query = "INSERT INTO {$this->table} (
-            nome, data_nascimento, cpf, documento_tipo, documento_numero, documento_orgao, foto,
-            instituicao, campus, curso, nivel, matricula, situacao_academica,
-            email, telefone
-        ) VALUES (
-            :nome, :data_nascimento, :cpf, :documento_tipo, :documento_numero, :documento_orgao, :foto,
-            :instituicao, :campus, :curso, :nivel, :matricula, :situacao_academica,
-            :email, :telefone
-        )";
+    // Cria novo estudante
+public function criar() {
+    $query = "INSERT INTO {$this->table} (
+        nome, data_nascimento, cpf, documento_tipo, documento_numero, documento_orgao, foto,
+        instituicao, campus, curso, nivel, matricula, situacao_academica, status_validacao,
+        email, telefone
+    ) VALUES (
+        :nome, :data_nascimento, :cpf, :documento_tipo, :documento_numero, :documento_orgao, :foto,
+        :instituicao, :campus, :curso, :nivel, :matricula, :situacao_academica, :status_validacao,
+        :email, :telefone
+    )";
 
-        $stmt = $this->conn->prepare($query);
+    $stmt = $this->conn->prepare($query);
 
-        // Sanitização
-        $this->nome = htmlspecialchars(strip_tags(trim($this->nome)));
-        $this->cpf = preg_replace('/[^0-9]/', '', $this->cpf);
-        $this->documento_numero = htmlspecialchars(strip_tags(trim($this->documento_numero)));
-        $this->documento_orgao = htmlspecialchars(strip_tags(trim($this->documento_orgao)));
-        $this->instituicao = htmlspecialchars(strip_tags(trim($this->instituicao)));
-        $this->campus = htmlspecialchars(strip_tags(trim($this->campus)));
-        $this->curso = htmlspecialchars(strip_tags(trim($this->curso)));
-        $this->nivel = htmlspecialchars(strip_tags(trim($this->nivel)));
-        $this->matricula = htmlspecialchars(strip_tags(trim($this->matricula)));
-        $this->situacao_academica = htmlspecialchars(strip_tags(trim($this->situacao_academica)));
-        $this->email = filter_var(trim($this->email), FILTER_SANITIZE_EMAIL);
-        $this->telefone = preg_replace('/[^0-9() -+]/', '', $this->telefone);
+    // Sanitização
+    $this->nome = htmlspecialchars(strip_tags(trim($this->nome)));
+    $this->cpf = preg_replace('/[^0-9]/', '', $this->cpf);
+    $this->documento_numero = htmlspecialchars(strip_tags(trim($this->documento_numero)));
+    $this->documento_orgao = htmlspecialchars(strip_tags(trim($this->documento_orgao)));
+    $this->instituicao = htmlspecialchars(strip_tags(trim($this->instituicao)));
+    $this->campus = htmlspecialchars(strip_tags(trim($this->campus)));
+    $this->curso = htmlspecialchars(strip_tags(trim($this->curso)));
+    $this->nivel = htmlspecialchars(strip_tags(trim($this->nivel)));
+    $this->matricula = htmlspecialchars(strip_tags(trim($this->matricula)));
+    $this->situacao_academica = htmlspecialchars(strip_tags(trim($this->situacao_academica)));
+    $this->status_validacao = htmlspecialchars(strip_tags(trim($this->status_validacao))); // ← ADICIONE ESTA LINHA
+    $this->email = filter_var(trim($this->email), FILTER_SANITIZE_EMAIL);
+    $this->telefone = preg_replace('/[^0-9() -+]/', '', $this->telefone);
 
-        $stmt->bindParam(':nome', $this->nome);
-        $stmt->bindParam(':data_nascimento', $this->data_nascimento);
-        $stmt->bindParam(':cpf', $this->cpf);
-        $stmt->bindParam(':documento_tipo', $this->documento_tipo);
-        $stmt->bindParam(':documento_numero', $this->documento_numero);
-        $stmt->bindParam(':documento_orgao', $this->documento_orgao);
-        $stmt->bindParam(':foto', $this->foto);
-        $stmt->bindParam(':instituicao', $this->instituicao);
-        $stmt->bindParam(':campus', $this->campus);
-        $stmt->bindParam(':curso', $this->curso);
-        $stmt->bindParam(':nivel', $this->nivel);
-        $stmt->bindParam(':matricula', $this->matricula);
-        $stmt->bindParam(':situacao_academica', $this->situacao_academica);
-        $stmt->bindParam(':email', $this->email);
-        $stmt->bindParam(':telefone', $this->telefone);
+    $stmt->bindParam(':nome', $this->nome);
+    $stmt->bindParam(':data_nascimento', $this->data_nascimento);
+    $stmt->bindParam(':cpf', $this->cpf);
+    $stmt->bindParam(':documento_tipo', $this->documento_tipo);
+    $stmt->bindParam(':documento_numero', $this->documento_numero);
+    $stmt->bindParam(':documento_orgao', $this->documento_orgao);
+    $stmt->bindParam(':foto', $this->foto);
+    $stmt->bindParam(':instituicao', $this->instituicao);
+    $stmt->bindParam(':campus', $this->campus);
+    $stmt->bindParam(':curso', $this->curso);
+    $stmt->bindParam(':nivel', $this->nivel);
+    $stmt->bindParam(':matricula', $this->matricula);
+    $stmt->bindParam(':situacao_academica', $this->situacao_academica);
+    $stmt->bindParam(':status_validacao', $this->status_validacao); // ← ADICIONE ESTA LINHA
+    $stmt->bindParam(':email', $this->email);
+    $stmt->bindParam(':telefone', $this->telefone);
 
-        return $stmt->execute();
-    }
+    return $stmt->execute();
+}
 
     // Listar todos
     public function listar() {
@@ -91,7 +95,7 @@ class Estudante {
     }
 
     // Atualizar
-    public function atualizar() {
+    public function atualizar() {   
         $query = "UPDATE {$this->table} SET
             nome = :nome,
             data_nascimento = :data_nascimento,
@@ -143,6 +147,7 @@ class Estudante {
         $stmt->bindParam(':email', $this->email);
         $stmt->bindParam(':telefone', $this->telefone);
         $stmt->bindParam(':id', $this->id);
+        $stmt->bindParam(':status_validacao', $this->status_validacao); 
 
         return $stmt->execute();
     }

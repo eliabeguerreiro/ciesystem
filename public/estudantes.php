@@ -38,6 +38,7 @@ if ($_POST) {
     $estudante->nivel = $_POST['nivel'] ?? '';
     $estudante->matricula = $_POST['matricula'] ?? '';
     $estudante->situacao_academica = $_POST['situacao_academica'] ?? 'Matriculado';
+    $estudante->status_validacao = $_POST['status_validacao'] ?? 'dados_aprovados'; // ← PADRÃO: dados_aprovados
     $estudante->email = $_POST['email'] ?? '';
     $estudante->telefone = $_POST['telefone'] ?? '';
 
@@ -85,29 +86,34 @@ if ($_POST) {
         }
     } 
     // ================================
-    // CADASTRO
+    // CADASTRO (SEM CRIAÇÃO MANUAL DE INSCRIÇÃO)
     // ================================
     else {
         $estudante->foto = $uploadFoto;
-        if (empty($erro)) {
-            if ($estudante->criar()) {
-                // === LOG: Estudante criado ===
-                require_once __DIR__ . '/../app/models/Log.php';
-                $log = new Log($db);
-                $novoId = $db->lastInsertId();
-                $log->registrar(
-                    $_SESSION['user_id'],
-                    'criou_estudante',
-                    "Nome: {$estudante->nome}, Matrícula: {$estudante->matricula}, Curso: {$estudante->curso}",
-                    $novoId,
-                    'estudantes'
-                );
-                $sucesso = "Estudante cadastrado com sucesso!";
-                // Limpa os campos após cadastro
-                foreach ($_POST as $key => $value) $_POST[$key] = '';
-            } else {
-                $erro = "Erro ao cadastrar estudante. Verifique se a matrícula ou CPF já existem.";
+        if ($estudante->criar()) {
+            $novoEstudanteId = $db->lastInsertId();
+
+            // === SALVAR DOCUMENTO DE IDENTIDADE (OPCIONAL) ===
+            if (!empty($_FILES['documento_identidade']['name'])) {
+                require_once __DIR__ . '/../app/models/DocumentoEstudante.php';
+                $docModel = new DocumentoEstudante($db);
+                $docModel->salvar($novoEstudanteId, $_FILES['documento_identidade'], $_POST['tipo_documento'] ?? 'rg');
             }
+
+            // === LOG: Estudante criado ===
+            require_once __DIR__ . '/../app/models/Log.php';
+            $log = new Log($db);
+            $log->registrar(
+                $_SESSION['user_id'],
+                'criou_estudante',
+                "Estudante: {$estudante->nome}, Matrícula: {$estudante->matricula}",
+                $novoEstudanteId,
+                'estudantes'
+            );
+            $sucesso = "Estudante cadastrado com sucesso!";
+            foreach ($_POST as $key => $value) $_POST[$key] = '';
+        } else {
+            $erro = "Erro ao cadastrar estudante. Verifique se a matrícula ou CPF já existem.";
         }
     }
 }
@@ -250,6 +256,26 @@ $estudantes = $estudante->listar();
                 </div>
             </div>
 
+            <!-- Documento de Identidade Digitalizado (Opcional) -->
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Documento de Identidade (Digitalizado - Opcional)</label>
+                    <input type="file" name="documento_identidade" accept=".jpg,.jpeg,.png,.pdf">
+                    <?php if ($editar): ?>
+                        <!-- Aqui você pode listar os documentos já anexados, se desejar -->
+                    <?php endif; ?>
+                </div>
+                <div class="form-group">
+                    <label>Tipo do Documento</label>
+                    <select name="tipo_documento">
+                        <option value="rg" <?= ($editar && ($editar['tipo_documento'] ?? '') === 'rg') ? 'selected' : '' ?>>RG</option>
+                        <option value="cnh" <?= ($editar && ($editar['tipo_documento'] ?? '') === 'cnh') ? 'selected' : '' ?>>CNH</option>
+                        <option value="passaporte" <?= ($editar && ($editar['tipo_documento'] ?? '') === 'passaporte') ? 'selected' : '' ?>>Passaporte</option>
+                        <option value="cpf" <?= ($editar && ($editar['tipo_documento'] ?? '') === 'cpf') ? 'selected' : '' ?>>CPF</option>
+                    </select>
+                </div>
+            </div>
+
             <hr>
 
             <!-- Dados Acadêmicos -->
@@ -289,6 +315,22 @@ $estudantes = $estudante->listar();
                 </div>
             </div>
 
+            <!-- Status de Validação (oculto no cadastro, pois é automático) -->
+            <?php if ($editar): ?>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Status de Validação *</label>
+                        <select name="status_validacao" required>
+                            <option value="pendente" <?= ($editar && $editar['status_validacao'] === 'pendente') ? 'selected' : '' ?>>Pendente</option>
+                            <option value="dados_aprovados" <?= ($editar && $editar['status_validacao'] === 'dados_aprovados') ? 'selected' : '' ?>>Dados Aprovados</option>
+                        </select>
+                    </div>
+                </div>
+            <?php else: ?>
+                <!-- No cadastro manual, já inicia como aprovado -->
+                <input type="hidden" name="status_validacao" value="dados_aprovados">
+            <?php endif; ?>
+
             <!-- Contato -->
             <h3>Contato (Opcional)</h3>
             <div class="form-row">
@@ -319,6 +361,7 @@ $estudantes = $estudante->listar();
                     <th>Curso</th>
                     <th>Instituição</th>
                     <th>Situação</th>
+                    <th>Status Validação</th>
                     <th>Ações</th>
                 </tr>
             </thead>
@@ -337,6 +380,7 @@ $estudantes = $estudante->listar();
                     <td><?= htmlspecialchars($e['curso']) ?></td>
                     <td><?= htmlspecialchars($e['instituicao']) ?></td>
                     <td><?= htmlspecialchars($e['situacao_academica']) ?></td>
+                    <td><?= htmlspecialchars($e['status_validacao']) ?></td>
                     <td class="acoes">
                         <a href="?editar=<?= $e['id'] ?>">Editar</a> |
                         <a href="?deletar=<?= $e['id'] ?>" onclick="return confirm('Tem certeza que deseja excluir este estudante?')">Excluir</a>
