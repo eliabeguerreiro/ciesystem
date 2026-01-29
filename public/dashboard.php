@@ -17,14 +17,15 @@ if (!$auth->isLoggedIn()) {
 </head>
 <body>
     <h1>Bem-vindo, <?= htmlspecialchars($_SESSION['user_nome']) ?>!</h1>
-    <p>Tipo: <?= $_SESSION['user_tipo'] ?></p>
+    <p>Tipo: <?= htmlspecialchars($_SESSION['user_tipo']) ?></p>
     
     <?php if ($_SESSION['user_tipo'] === 'admin'): ?>
         <p><a href="usuarios.php">Gerenciar Usuários</a></p>
-        <p><a href="emitir_cie.php">Emitir CIE</a></p>
+        <p><a href="estudantes.php">Gerenciar Estudantes</a></p>
+        <p><a href="nova_inscricao.php">Nova Inscrição</a></p>
+        <p><a href="gerenciar_inscricoes.php">Gerenciar Inscrições</a></p>
     <?php endif; ?>
-    <p><a href="estudantes.php">Gerenciar Estudantes</a></p>
-    <p><a href="cie_listagem.php">Visualizar CIEs Emitidas</a></p>
+    
     <p><a href="logout.php">Sair</a></p>
 </body>
 </html>

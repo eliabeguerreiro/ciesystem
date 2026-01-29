@@ -9,11 +9,11 @@ if (!$auth->isLoggedIn() || !$auth->isAdmin()) {
 }
 
 // Carrega dependências
-require_once __DIR__ . '/../app/models/Carteirinha.php';
+require_once __DIR__ . '/../app/models/Inscricao.php';
 
 $database = new Database();
 $db = $database->getConnection();
-$carteirinha = new Carteirinha($db);
+$inscricao = new Inscricao($db);
 
 $erro = '';
 $sucesso = '';
@@ -143,7 +143,7 @@ $cieList = $carteirinha->listarComEstudantes();
                         <td>
                             <?php
                             // Conta documentos da CIE
-                            $carteirinhaTemp = new Carteirinha($db);
+                            $carteirinhaTemp = new Inscricao($db);
                             $carteirinhaTemp->id = $cie['id'];
                             $docs = $carteirinhaTemp->getDocumentos();
                             if (empty($docs)) {

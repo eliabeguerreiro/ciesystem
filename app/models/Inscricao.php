@@ -1,21 +1,21 @@
 <?php
 require_once __DIR__ . '/../config/database.php';
 
-class Carteirinha {
+class Inscricao {
     private $conn;
-    private $table = 'carteirinhas';
+    private $table = 'inscricoes';
 
     public $id;
     public $estudante_id;
-    public $cie_codigo;
-    public $data_validade;
-    public $situacao;
+    public $codigo_inscricao; // antes: cie_codigo
+    public $data_validade;    // pode ser removido depois, mas mantemos por agora
+    public $situacao;         // agora: 'pendente', 'aprovada', 'recusada', 'paga'
 
     public function __construct($db) {
         $this->conn = $db;
     }
 
-    // Gera um código único não sequencial (UUID v4)
+    // Gera código único (mantém UUID)
     private function gerarCodigoUnico() {
         return sprintf('%04x%04x-%04x-%04x-%04x-%04x%04x%04x',
             mt_rand(0, 0xffff), mt_rand(0, 0xffff),
@@ -26,62 +26,53 @@ class Carteirinha {
         );
     }
 
-    // Cria uma nova CIE (sem documentos — eles são salvos separadamente)
+    // Cria nova inscrição
     public function criar() {
-        $this->cie_codigo = $this->gerarCodigoUnico();
-        $this->data_validade = (new DateTime())->modify('+1 year')->format('Y') . '-03-31'; // data fixa definida por você
-        $this->situacao = $this->situacao ?? 'ativa';
+        $this->codigo_inscricao = $this->gerarCodigoUnico();
+        // Mantemos data_validade por compatibilidade (pode ser removida depois)
+        $this->data_validade = date('Y') + 1 . '-03-31'; // ajustado para lei
+        $this->situacao = 'pendente'; // novo status inicial
         
         $query = "INSERT INTO {$this->table} (
-            estudante_id, cie_codigo, data_validade, situacao
+            estudante_id, codigo_inscricao, data_validade, situacao
         ) VALUES (
-            :estudante_id, :cie_codigo, :data_validade, :situacao
+            :estudante_id, :codigo_inscricao, :data_validade, :situacao
         )";
 
         $stmt = $this->conn->prepare($query);
-
-        $this->estudante_id = (int)$this->estudante_id;
-
-        $stmt->bindParam(':estudante_id', $this->estudante_id);
-        $stmt->bindParam(':cie_codigo', $this->cie_codigo);
+        $stmt->bindParam(':estudante_id', $this->estudante_id, PDO::PARAM_INT);
+        $stmt->bindParam(':codigo_inscricao', $this->codigo_inscricao);
         $stmt->bindParam(':data_validade', $this->data_validade);
         $stmt->bindParam(':situacao', $this->situacao);
 
         return $stmt->execute();
     }
 
-    // Salva múltiplos documentos vinculados a esta CIE
+    // Salva múltiplos documentos vinculados à inscrição
     public function salvarDocumentos($documentos, $tipo) {
-        if (empty($documentos['name'][0])) return true;
-
-        // Verifica se a CIE foi criada (tem ID)
-        if (empty($this->id)) {
-            return false;
-        }
+        if (empty($documentos['name'][0]) || empty($this->id)) return true;
 
         $allowed = ['jpg', 'jpeg', 'png', 'pdf'];
-        $query = "INSERT INTO documentos_cie (carteirinha_id, tipo, caminho_arquivo, descricao) 
-                  VALUES (:carteirinha_id, :tipo, :caminho_arquivo, :descricao)";
+        $query = "INSERT INTO documentos_inscricao (inscricao_id, tipo, caminho_arquivo, descricao) 
+                  VALUES (:inscricao_id, :tipo, :caminho_arquivo, :descricao)";
         $stmt = $this->conn->prepare($query);
 
         foreach ($documentos['name'] as $index => $nomeOriginal) {
             if ($documentos['error'][$index] !== UPLOAD_ERR_OK) continue;
-
             $ext = strtolower(pathinfo($nomeOriginal, PATHINFO_EXTENSION));
             if (!in_array($ext, $allowed)) continue;
 
-            $nomeUnico = "doc_{$tipo}_" . uniqid() . '_' . time() . '.' . $ext;
+            $nomeUnico = "doc_{$tipo}_" . uniqid() . '.' . $ext;
             $subdir = $tipo === 'pagamento' ? 'pagamento' : 'matricula';
             $caminhoAbsoluto = __DIR__ . "/../../public/uploads/comprovantes/{$subdir}/{$nomeUnico}";
 
-            // Cria diretório se não existir
             if (!is_dir(dirname($caminhoAbsoluto))) {
                 mkdir(dirname($caminhoAbsoluto), 0777, true);
             }
 
             if (move_uploaded_file($documentos['tmp_name'][$index], $caminhoAbsoluto)) {
                 $caminhoRelativo = "uploads/comprovantes/{$subdir}/{$nomeUnico}";
-                $stmt->bindParam(':carteirinha_id', $this->id);
+                $stmt->bindParam(':inscricao_id', $this->id);
                 $stmt->bindParam(':tipo', $tipo);
                 $stmt->bindParam(':caminho_arquivo', $caminhoRelativo);
                 $stmt->bindParam(':descricao', $nomeOriginal);
@@ -91,50 +82,49 @@ class Carteirinha {
         return true;
     }
 
-    // Busca todos os documentos de uma CIE
+    // Busca documentos da inscrição
     public function getDocumentos() {
         if (empty($this->id)) return [];
-
-        $query = "SELECT * FROM documentos_cie WHERE carteirinha_id = :carteirinha_id ORDER BY tipo, criado_em";
+        $query = "SELECT * FROM documentos_inscricao WHERE inscricao_id = :inscricao_id ORDER BY tipo, criado_em";
         $stmt = $this->conn->prepare($query);
-        $stmt->bindParam(':carteirinha_id', $this->id);
+        $stmt->bindParam(':inscricao_id', $this->id);
         $stmt->execute();
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
 
-    // Busca CIE por ID
-    public function buscarPorId($id) {
-        $query = "SELECT * FROM {$this->table} WHERE id = :id";
-        $stmt = $this->conn->prepare($query);
-        $stmt->bindParam(':id', $id);
-        $stmt->execute();
-        return $stmt->fetch(PDO::FETCH_ASSOC);
-    }
-
-    // Lista todas as CIEs com dados do estudante
+    // Lista inscrições com dados do estudante
     public function listarComEstudantes() {
         $query = "
             SELECT 
-                c.*, 
+                i.*, 
                 e.nome AS estudante_nome, 
                 e.matricula AS estudante_matricula,
                 e.curso AS estudante_curso
-            FROM carteirinhas c
-            INNER JOIN estudantes e ON c.estudante_id = e.id
-            ORDER BY c.criado_em DESC
+            FROM inscricoes i
+            INNER JOIN estudantes e ON i.estudante_id = e.id
+            ORDER BY i.id DESC
         ";
         $stmt = $this->conn->prepare($query);
         $stmt->execute();
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
 
-    // Atualiza situação da CIE (ex: ativa → vencida)
+    // Atualiza situação (ex: pendente → aprovada)
     public function atualizarSituacao($novaSituacao) {
         $query = "UPDATE {$this->table} SET situacao = :situacao WHERE id = :id";
         $stmt = $this->conn->prepare($query);
         $stmt->bindParam(':situacao', $novaSituacao);
         $stmt->bindParam(':id', $this->id);
         return $stmt->execute();
+    }
+
+    // Busca por ID
+    public function buscarPorId($id) {
+        $query = "SELECT * FROM {$this->table} WHERE id = :id";
+        $stmt = $this->conn->prepare($query);
+        $stmt->bindParam(':id', $id);
+        $stmt->execute();
+        return $stmt->fetch(PDO::FETCH_ASSOC);
     }
 }
 ?>
