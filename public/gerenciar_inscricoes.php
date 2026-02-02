@@ -224,8 +224,20 @@ $inscricoesList = $inscricao->listarComEstudantes();
                                 echo "—";
                             } else {
                                 foreach ($docs as $doc) {
-                                    echo '<div><a href="../' . htmlspecialchars($doc['caminho_arquivo']) . '" target="_blank" class="doc-link">'
-                                        . htmlspecialchars($doc['descricao']) . '</a></div>';
+                                    // ✅ Nome amigável baseado no tipo
+                                    switch ($doc['tipo'] ?? '') {
+                                        case 'matricula':
+                                            $nomeAmigavel = 'Comprovante de Matrícula';
+                                            break;
+                                        case 'pagamento':
+                                            $nomeAmigavel = 'Comprovante de Pagamento';
+                                            break;
+                                        default:
+                                            $nomeAmigavel = 'Documento';
+                                    }
+                                    
+                                    echo '<div><a href="' . htmlspecialchars($doc['caminho_arquivo']) . '" target="_blank" class="doc-link">'
+                                        . htmlspecialchars($nomeAmigavel) . '</a></div>';
                                 }
                             }
                             ?>
