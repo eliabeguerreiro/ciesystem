@@ -7,15 +7,15 @@ class Inscricao {
 
     public $id;
     public $estudante_id;
-    public $codigo_inscricao; // antes: cie_codigo
-    public $data_validade;    // pode ser removido depois, mas mantemos por agora
-    public $situacao;         // agora: 'pendente', 'aprovada', 'recusada', 'paga'
+    public $codigo_inscricao;
+    public $data_validade;
+    public $situacao;
 
     public function __construct($db) {
         $this->conn = $db;
     }
 
-    // Gera código único (mantém UUID)
+    // Gera código único (UUID v4)
     private function gerarCodigoUnico() {
         return sprintf('%04x%04x-%04x-%04x-%04x-%04x%04x%04x',
             mt_rand(0, 0xffff), mt_rand(0, 0xffff),
@@ -29,9 +29,8 @@ class Inscricao {
     // Cria nova inscrição
     public function criar() {
         $this->codigo_inscricao = $this->gerarCodigoUnico();
-        // Mantemos data_validade por compatibilidade (pode ser removida depois)
-        $this->data_validade = date('Y') + 1 . '-03-31'; // ajustado para lei
-        $this->situacao = 'pendente'; // novo status inicial
+        $this->data_validade = (date('Y') + 1) . '-03-31';
+        $this->situacao = 'pagamento_pendente'; // ← ajustado para novo fluxo
         
         $query = "INSERT INTO {$this->table} (
             estudante_id, codigo_inscricao, data_validade, situacao
@@ -50,7 +49,22 @@ class Inscricao {
 
     // Salva múltiplos documentos vinculados à inscrição
     public function salvarDocumentos($documentos, $tipo) {
-        if (empty($documentos['name'][0]) || empty($this->id)) return true;
+        // Valida inputs mínimos
+        if (empty($documentos) || empty($this->id)) return true;
+
+        // Normaliza para suportar input único ou múltiplo (a tag <input> sem [] traz strings)
+        if (!isset($documentos['name'])) return true;
+        if (!is_array($documentos['name'])) {
+            $documentos = [
+                'name' => [$documentos['name']],
+                'type' => isset($documentos['type']) ? [$documentos['type']] : [''],
+                'tmp_name' => isset($documentos['tmp_name']) ? [$documentos['tmp_name']] : [''],
+                'error' => isset($documentos['error']) ? [$documentos['error']] : [UPLOAD_ERR_NO_FILE],
+                'size' => isset($documentos['size']) ? [$documentos['size']] : [0],
+            ];
+        }
+
+        if (empty($documentos['name'][0])) return true;
 
         $allowed = ['jpg', 'jpeg', 'png', 'pdf'];
         $query = "INSERT INTO documentos_inscricao (inscricao_id, tipo, caminho_arquivo, descricao) 
@@ -58,7 +72,9 @@ class Inscricao {
         $stmt = $this->conn->prepare($query);
 
         foreach ($documentos['name'] as $index => $nomeOriginal) {
-            if ($documentos['error'][$index] !== UPLOAD_ERR_OK) continue;
+            if (!isset($documentos['error'][$index]) || $documentos['error'][$index] !== UPLOAD_ERR_OK) continue;
+            if (!isset($documentos['tmp_name'][$index]) || $documentos['tmp_name'][$index] === '') continue;
+
             $ext = strtolower(pathinfo($nomeOriginal, PATHINFO_EXTENSION));
             if (!in_array($ext, $allowed)) continue;
 
@@ -72,24 +88,34 @@ class Inscricao {
 
             if (move_uploaded_file($documentos['tmp_name'][$index], $caminhoAbsoluto)) {
                 $caminhoRelativo = "uploads/comprovantes/{$subdir}/{$nomeUnico}";
-                $stmt->bindParam(':inscricao_id', $this->id);
-                $stmt->bindParam(':tipo', $tipo);
-                $stmt->bindParam(':caminho_arquivo', $caminhoRelativo);
-                $stmt->bindParam(':descricao', $nomeOriginal);
+                // Usa bindValue para evitar referência entre execuções
+                $stmt->bindValue(':inscricao_id', $this->id, PDO::PARAM_INT);
+                $stmt->bindValue(':tipo', $tipo);
+                $stmt->bindValue(':caminho_arquivo', $caminhoRelativo);
+                $stmt->bindValue(':descricao', $nomeOriginal);
                 $stmt->execute();
             }
         }
         return true;
     }
 
-    // Busca documentos da inscrição
+    // Busca documentos da inscrição — SEMPRE retorna array
     public function getDocumentos() {
-        if (empty($this->id)) return [];
+        if (empty($this->id)) {
+            return [];
+        }
+
         $query = "SELECT * FROM documentos_inscricao WHERE inscricao_id = :inscricao_id ORDER BY tipo, criado_em";
         $stmt = $this->conn->prepare($query);
-        $stmt->bindParam(':inscricao_id', $this->id);
-        $stmt->execute();
-        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+        $stmt->bindParam(':inscricao_id', $this->id, PDO::PARAM_INT);
+        
+        try {
+            $stmt->execute();
+            $result = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            return $result ?: [];
+        } catch (Exception $e) {
+            return [];
+        }
     }
 
     // Lista inscrições com dados do estudante
@@ -109,12 +135,12 @@ class Inscricao {
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
 
-    // Atualiza situação (ex: pendente → aprovada)
+    // Atualiza situação
     public function atualizarSituacao($novaSituacao) {
         $query = "UPDATE {$this->table} SET situacao = :situacao WHERE id = :id";
         $stmt = $this->conn->prepare($query);
         $stmt->bindParam(':situacao', $novaSituacao);
-        $stmt->bindParam(':id', $this->id);
+        $stmt->bindParam(':id', $this->id, PDO::PARAM_INT);
         return $stmt->execute();
     }
 
@@ -122,7 +148,7 @@ class Inscricao {
     public function buscarPorId($id) {
         $query = "SELECT * FROM {$this->table} WHERE id = :id";
         $stmt = $this->conn->prepare($query);
-        $stmt->bindParam(':id', $id);
+        $stmt->bindParam(':id', $id, PDO::PARAM_INT);
         $stmt->execute();
         return $stmt->fetch(PDO::FETCH_ASSOC);
     }

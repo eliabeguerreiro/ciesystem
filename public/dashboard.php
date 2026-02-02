@@ -22,7 +22,6 @@ if (!$auth->isLoggedIn()) {
     <?php if ($_SESSION['user_tipo'] === 'admin'): ?>
         <p><a href="usuarios.php">Gerenciar Usuários</a></p>
         <p><a href="estudantes.php">Gerenciar Estudantes</a></p>
-        <p><a href="nova_inscricao.php">Nova Inscrição</a></p>
         <p><a href="gerenciar_inscricoes.php">Gerenciar Inscrições</a></p>
     <?php endif; ?>
     
