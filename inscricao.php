@@ -3,13 +3,16 @@
 require_once __DIR__ . '/app/config/database.php';
 require_once __DIR__ . '/app/models/Estudante.php';
 require_once __DIR__ . '/app/models/Inscricao.php';
-require_once __DIR__ . '/app/controllers/EstudanteController.php'; // Adicionado para o upload da foto
+require_once __DIR__ . '/app/controllers/EstudanteController.php';
+require_once __DIR__ . '/app/models/DocumentoEstudante.php'; // Novo modelo
 
 $database = new Database();
 $db = $database->getConnection();
 
 $estudanteModel = new Estudante($db);
 $inscricaoModel = new Inscricao($db);
+$docIdentidadeModel = new DocumentoEstudante($db); // Instância do modelo de doc
+$estudanteController = new EstudanteController($db); // Instância do controller
 
 $erro = '';
 $sucesso = '';
@@ -20,7 +23,7 @@ $codigoGerado = '';
 // ================================
 if ($_POST) {
     // Valida campos obrigatórios
-    $camposObrigatorios = ['nome', 'data_nascimento', 'cpf', 'documento_tipo', 'documento_numero', 
+    $camposObrigatorios = ['nome', 'data_nascimento', 'cpf', 'documento_tipo', 'documento_numero',
                           'instituicao', 'curso', 'nivel', 'matricula'];
     foreach ($camposObrigatorios as $campo) {
         if (empty($_POST[$campo])) {
@@ -34,6 +37,23 @@ if ($_POST) {
         $erro = "Comprovante de matrícula é obrigatório.";
     }
 
+    // Verifica se documentos de identidade (frente e verso) e o tipo foram enviados
+    $tipoDocIdentidade = $_POST['documento_tipo'] ?? null;
+    $tipoDocIdentidade = strtolower($tipoDocIdentidade);
+    $docFrente = $_FILES['doc_identidade_frente'] ?? null;
+    $docVerso = $_FILES['doc_identidade_verso'] ?? null;
+
+    if (!$tipoDocIdentidade || empty($docFrente['name']) || empty($docVerso['name'])) {
+         $erro = "É obrigatório selecionar o tipo e anexar ambos os arquivos: Frente e Verso do Documento de Identificação.";
+    }
+
+    // Validação do tipo de documento
+    $tiposValidos = ['rg', 'cnh', 'passaporte', 'cpf'];
+    if ($tipoDocIdentidade && !in_array(strtolower($tipoDocIdentidade), $tiposValidos)) {
+         $erro = "Tipo de documento de identidade inválido.";
+    }
+
+
     if (empty($erro)) {
         // Verifica se CPF ou matrícula já existem
         $stmt = $db->prepare("SELECT id FROM estudantes WHERE cpf = ? OR matricula = ?");
@@ -41,81 +61,81 @@ if ($_POST) {
         if ($stmt->fetch()) {
             $erro = "CPF ou matrícula já cadastrados. Entre em contato com a administração.";
         } else {
-            // Cria estudante
-            $estudante = new Estudante($db);
-            $estudante->nome = $_POST['nome'];
-            $estudante->data_nascimento = $_POST['data_nascimento'];
-            $estudante->cpf = $_POST['cpf'];
-            $estudante->documento_tipo = $_POST['documento_tipo'];
-            $estudante->documento_numero = $_POST['documento_numero'];
-            $estudante->documento_orgao = $_POST['documento_orgao'] ?? '';
-            $estudante->instituicao = $_POST['instituicao'];
-            $estudante->campus = $_POST['campus'] ?? '';
-            $estudante->curso = $_POST['curso'];
-            $estudante->nivel = $_POST['nivel'];
-            $estudante->matricula = $_POST['matricula'];
-            $estudante->situacao_academica = $_POST['situacao_academica'] ?? 'Matriculado';
-            $estudante->email = $_POST['email'] ?? '';
-            $estudante->telefone = $_POST['telefone'] ?? '';
-            $estudante->status_validacao = 'pendente'; // ← diferente do cadastro manual
-
             // Processar foto se enviada
-            $fotoAtualizada = false;
+            $fotoCaminho = null;
             if (isset($_FILES['foto']) && $_FILES['foto']['error'] === UPLOAD_ERR_OK) {
-                 $estudanteController = new EstudanteController($db);
-                 $caminhoFoto = $estudanteController->uploadFoto($_FILES['foto']);
-                 if ($caminhoFoto) {
-                     $estudante->foto = $caminhoFoto;
-                     $fotoAtualizada = true;
-                 } else {
-                     // Pode-se definir um erro ou simplesmente ignorar se for opcional
-                     // $erro = "Erro ao fazer upload da foto.";
-                     $estudante->foto = null; // Garante que não seja vazia se falhar
+                 $fotoCaminho = $estudanteController->uploadFoto($_FILES['foto']);
+                 if (!$fotoCaminho) {
+                     $erro = "Erro ao fazer upload da foto.";
                  }
-            } else {
-                 $estudante->foto = null; // Define como nulo se não for enviada
-            }
+            } // Se não for enviada, $fotoCaminho continua null
 
 
-            if ($estudante->criar()) {
-                $estudanteId = $db->lastInsertId();
+            if (empty($erro)) { // Prosseguir somente se a foto for válida ou não enviada
+                // Cria estudante
+                $estudante = new Estudante($db);
+                $estudante->nome = $_POST['nome'];
+                $estudante->data_nascimento = $_POST['data_nascimento'];
+                $estudante->cpf = $_POST['cpf'];
+                $estudante->documento_tipo = $_POST['documento_tipo'];
+                $estudante->documento_numero = $_POST['documento_numero'];
+                $estudante->documento_orgao = $_POST['documento_orgao'] ?? '';
+                $estudante->instituicao = $_POST['instituicao'];
+                $estudante->campus = $_POST['campus'] ?? '';
+                $estudante->curso = $_POST['curso'];
+                $estudante->nivel = $_POST['nivel'];
+                $estudante->matricula = $_POST['matricula'];
+                $estudante->situacao_academica = $_POST['situacao_academica'] ?? 'Matriculado';
+                $estudante->email = $_POST['email'] ?? '';
+                $estudante->telefone = $_POST['telefone'] ?? '';
+                $estudante->status_validacao = 'pendente'; // ← diferente do cadastro manual
+                $estudante->foto = $fotoCaminho; // Atribuir a foto ou null
 
-                // *** ATUALIZAR A FOTO NO REGISTRO RECÉM-CRIADO SE FOR NECESSÁRIO ***
-                // Isso é necessário porque o campo 'foto' não era inicializado no cadastro público antes.
-                if ($fotoAtualizada) {
-                    $updateStmt = $db->prepare("UPDATE estudantes SET foto = :foto WHERE id = :id");
-                    $updateStmt->bindParam(':foto', $estudante->foto);
-                    $updateStmt->bindParam(':id', $estudanteId);
-                    $updateStmt->execute();
-                }
 
+                if ($estudante->criar()) {
+                    $estudanteId = $db->lastInsertId();
 
-                // Cria inscrição
-                $inscricao = new Inscricao($db);
-                $inscricao->estudante_id = $estudanteId;
-                $inscricao->criar(); // cria com status 'aguardando_validacao'
+                    // Cria inscrição
+                    $inscricao = new Inscricao($db);
+                    $inscricao->estudante_id = $estudanteId;
+                    $inscricao->criar(); // cria com status 'aguardando_validacao'
 
-                // Obter ID da inscrição
-                $stmt = $db->prepare("SELECT id, codigo_inscricao FROM inscricoes WHERE estudante_id = ? ORDER BY id DESC LIMIT 1");
-                $stmt->execute([$estudanteId]);
-                $resultado = $stmt->fetch();
-                if ($resultado) {
-                    $inscricaoId = $resultado['id'];
-                    $codigoGerado = $resultado['codigo_inscricao'];
+                    // Obter ID da inscrição
+                    $stmt = $db->prepare("SELECT id, codigo_inscricao FROM inscricoes WHERE estudante_id = ? ORDER BY id DESC LIMIT 1");
+                    $stmt->execute([$estudanteId]);
+                    $resultado = $stmt->fetch();
+                    if ($resultado) {
+                        $inscricaoId = $resultado['id'];
+                        $codigoGerado = $resultado['codigo_inscricao'];
 
-                    // Salvar comprovante de matrícula
-                    if (!empty($_FILES['comprovante_matricula']['name'])) {
-                        $inscTemp = new Inscricao($db);
-                        $inscTemp->id = $inscricaoId;
-                        $inscTemp->salvarDocumentos($_FILES['comprovante_matricula'], 'matricula');
+                        // Salvar comprovante de matrícula
+                        if (!empty($_FILES['comprovante_matricula']['name'])) {
+                            $inscTemp = new Inscricao($db);
+                            $inscTemp->id = $inscricaoId;
+                            $inscTemp->salvarDocumentos($_FILES['comprovante_matricula'], 'matricula');
+                        }
+
+                        // Salvar documentos de identidade (frente e verso) - OBRIGATÓRIO
+                        if ($tipoDocIdentidade && $docFrente && $docVerso) {
+                            if (!$docIdentidadeModel->salvarFrenteVerso($estudanteId, $docFrente, $docVerso, $tipoDocIdentidade)) {
+                                $erro = "Erro ao salvar os documentos de identidade (Frente e Verso).";
+                                // Opcional: deletar o estudante e a inscrição recém-criados se o upload falhar?
+                                // $estudante->id = $estudanteId; $estudante->deletar();
+                                // $inscricao->id = $inscricaoId; $inscricao->deletar();
+                            } else {
+                                $sucesso = "Inscrição realizada com sucesso!";
+                            }
+                        } else {
+                            // Este else não deveria ser atingido devido à validação inicial, mas mantido por segurança
+                            $erro = "Erro interno: Documentos de identidade não fornecidos.";
+                        }
+
+                    } else {
+                        $erro = "Erro ao gerar inscrição.";
                     }
-
-                    $sucesso = "Inscrição realizada com sucesso!";
                 } else {
-                    $erro = "Erro ao gerar inscrição.";
+                    $erro = "Erro ao cadastrar seus dados.";
                 }
-            } else {
-                $erro = "Erro ao cadastrar seus dados.";
             }
         }
     }
@@ -172,13 +192,13 @@ if ($_POST) {
                         <label>Data de Nascimento *</label>
                         <input type="date" name="data_nascimento" value="<?= htmlspecialchars($_POST['data_nascimento'] ?? '') ?>" required>
                     </div>
-                </div>
-
-                <div class="form-row">
                     <div class="form-group">
                         <label>CPF *</label>
                         <input type="text" name="cpf" value="<?= htmlspecialchars($_POST['cpf'] ?? '') ?>" placeholder="000.000.000-00" required>
                     </div>
+                </div>
+
+                <div class="form-row">
                     <div class="form-group">
                         <label>Tipo de Documento *</label>
                         <select name="documento_tipo" required>
@@ -191,7 +211,31 @@ if ($_POST) {
                         <label>Número do Documento *</label>
                         <input type="text" name="documento_numero" value="<?= htmlspecialchars($_POST['documento_numero'] ?? '') ?>" required>
                     </div>
+                    <div class="form-group">
+                        <label>Órgão Expedidor</label>
+                        <input type="text" name="documento_orgao" value="<?= htmlspecialchars($_POST['documento_orgao'] ?? '') ?>">
+                    </div>
                 </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Foto 3x4 (JPG, PNG) (Opcional)</label>
+                        <input type="file" name="foto" accept=".jpg,.jpeg,.png">
+                    </div>
+                </div>
+
+                <!-- Documentos de Identidade -->
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Documento de Identidade - Frente *</label>
+                        <input type="file" name="doc_identidade_frente" accept=".jpg,.jpeg,.png,.pdf" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Documento de Identidade - Verso *</label>
+                        <input type="file" name="doc_identidade_verso" accept=".jpg,.jpeg,.png,.pdf" required>
+                    </div>
+                </div>
+
 
                 <!-- Dados Acadêmicos -->
                 <h3>Dados Acadêmicos</h3>
@@ -230,19 +274,12 @@ if ($_POST) {
                     </select>
                 </div>
 
-                <!-- Foto -->
-                <h3>Foto </h3>
-                <div class="form-group">
-                    <label>Anexe sua foto (JPG, PNG)</label>
-                    <input type="file" name="foto" accept=".jpg,.jpeg,.png" required>
-                </div>
-
                 <!-- Contato -->
-                <h3>Contato</h3>
+                <h3>Contato (Opcional)</h3>
                 <div class="form-row">
                     <div class="form-group">
                         <label>E-mail</label>
-                        <input type="email" name="email" value="<?= htmlspecialchars($_POST['email'] ?? '') ?>" required>
+                        <input type="email" name="email" value="<?= htmlspecialchars($_POST['email'] ?? '') ?>">
                     </div>
                     <div class="form-group">
                         <label>Telefone</label>

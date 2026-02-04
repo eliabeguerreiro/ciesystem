@@ -11,11 +11,13 @@ if (!$auth->isLoggedIn() || !$auth->isAdmin()) {
 // Carrega dependências
 require_once __DIR__ . '/../app/models/Estudante.php';
 require_once __DIR__ . '/../app/controllers/EstudanteController.php';
+require_once __DIR__ . '/../app/models/DocumentoEstudante.php'; // Novo modelo
 
 $database = new Database();
 $db = $database->getConnection();
 $estudanteCtrl = new EstudanteController($db);
 $estudante = new Estudante($db);
+$docIdentidadeModel = new DocumentoEstudante($db); // Instância do modelo de doc
 
 $erro = '';
 $sucesso = '';
@@ -50,13 +52,44 @@ if ($_POST) {
         }
     }
 
+    // Processar Documentos de Identidade (Frente e Verso)
+    $tipoDocIdentidade = $_POST['documento_tipo'] ?? null;
+    $tipoDocIdentidade = strtolower($tipoDocIdentidade);
+    $docFrente = $_FILES['doc_identidade_frente'] ?? null;
+    $docVerso = $_FILES['doc_identidade_verso'] ?? null;
+
+    // Validação para cadastro e edição
+    if (!isset($_POST['id'])) { // Cadastro novo
+        if ($tipoDocIdentidade && (!$docFrente || empty($docFrente['name']) || !$docVerso || empty($docVerso['name']))) {
+             $erro = "Para o cadastro com documento de identidade, é necessário anexar ambos os arquivos: Frente e Verso.";
+        }
+        if ($tipoDocIdentidade && (!empty($docFrente['name']) && !empty($docVerso['name']))) {
+            // Validação do tipo de documento se os arquivos forem enviados
+            $tiposValidos = ['rg', 'cnh', 'passaporte', 'cpf'];
+            if (!in_array(strtolower($tipoDocIdentidade), $tiposValidos)) {
+                 $erro = "Tipo de documento de identidade inválido.";
+            }
+        }
+    } else { // Edição
+         if ($tipoDocIdentidade && (!empty($docFrente['name']) || !empty($docVerso['name']))) {
+             // Se um novo tipo for selecionado e arquivos forem enviados, valida
+             $tiposValidos = ['rg', 'cnh', 'passaporte', 'cpf'];
+             if (!in_array(strtolower($tipoDocIdentidade), $tiposValidos)) {
+                  $erro = "Tipo de documento de identidade inválido.";
+             } elseif (empty($docFrente['name']) || empty($docVerso['name'])) {
+                  $erro = "Ao enviar documentos de identidade, ambos os arquivos (Frente e Verso) devem ser anexados.";
+             }
+         }
+    }
+
+
     // ================================
     // EDIÇÃO
     // ================================
     if (isset($_POST['id'])) {
         $estudante->id = $_POST['id'];
         $registroAtual = $estudante->buscarPorId($estudante->id);
-        
+
         // Se foi feito upload de nova foto → deleta a antiga
         if ($uploadFoto !== null) {
             if (!empty($registroAtual['foto'])) {
@@ -69,51 +102,65 @@ if ($_POST) {
 
         if (empty($erro)) {
             if ($estudante->atualizar()) {
-                // === LOG: Estudante editado ===
-                require_once __DIR__ . '/../app/models/Log.php';
-                $log = new Log($db);
-                $log->registrar(
-                    $_SESSION['user_id'],
-                    'editou_estudante',
-                    "ID: {$estudante->id}, Nome: {$estudante->nome}, Matrícula: {$estudante->matricula}",
-                    $estudante->id,
-                    'estudantes'
-                );
-                $sucesso = "Estudante atualizado com sucesso!";
+
+                // --- Processar Documentos de Identidade na Edição ---
+                if ($tipoDocIdentidade && !empty($docFrente['name']) && !empty($docVerso['name'])) {
+                    // Deletar documentos antigos do mesmo tipo (frente e verso)
+                    $docIdentidadeModel->deletarPorEstudanteETipo($estudante->id, $tipoDocIdentidade);
+
+                    // Salvar os novos documentos (frente e verso)
+                    if (!$docIdentidadeModel->salvarFrenteVerso($estudante->id, $docFrente, $docVerso, $tipoDocIdentidade)) {
+                        $erro = "Erro ao salvar os novos documentos de identidade (Frente e Verso).";
+                    }
+                }
+                // ---
+
+                if (empty($erro)) { // Prosseguir com sucesso se não houve erro no upload
+                    // === LOG: Estudante editado ===
+                    require_once __DIR__ . '/../app/models/Log.php';
+                    $log = new Log($db);
+                    $log->registrar(
+                        $_SESSION['user_id'],
+                        'editou_estudante',
+                        "ID: {$estudante->id}, Nome: {$estudante->nome}, Matrícula: {$estudante->matricula}",
+                        $estudante->id,
+                        'estudantes'
+                    );
+                    $sucesso = "Estudante atualizado com sucesso!";
+                }
             } else {
                 $erro = "Erro ao atualizar estudante.";
             }
         }
-    } 
+    }
     // ================================
     // CADASTRO (SEM CRIAÇÃO MANUAL DE INSCRIÇÃO)
     // ================================
     else {
-        $estudante->foto = $uploadFoto;
-        if ($estudante->criar()) {
-            $novoEstudanteId = $db->lastInsertId();
+        if (empty($erro)) { // Apenas prosseguir se as validações acima estiverem OK
+            $estudante->foto = $uploadFoto;
+            if ($estudante->criar()) {
+                $novoEstudanteId = $db->lastInsertId();
 
-            // === SALVAR DOCUMENTO DE IDENTIDADE (OPCIONAL) ===
-            if (!empty($_FILES['documento_identidade']['name'])) {
-                require_once __DIR__ . '/../app/models/DocumentoEstudante.php';
-                $docModel = new DocumentoEstudante($db);
-                $docModel->salvar($novoEstudanteId, $_FILES['documento_identidade'], $_POST['tipo_documento'] ?? 'rg');
+                // === SALVAR DOCUMENTOS DE IDENTIDADE (Opcional, mas obrigatório se o tipo for selecionado) ===
+                if ($tipoDocIdentidade && $docFrente && $docVerso) {
+                    if (!$docIdentidadeModel->salvarFrenteVerso($novoEstudanteId, $docFrente, $docVerso, $tipoDocIdentidade)) {
+                        $erro = "Erro ao salvar os documentos de identidade (Frente e Verso).";
+                        // Opcional: deletar o estudante recém-criado se o upload falhar?
+                        // $estudante->id = $novoEstudanteId; $estudante->deletar();
+                    } else {
+                        $sucesso = "Estudante cadastrado com sucesso!";
+                        foreach ($_POST as $key => $value) $_POST[$key] = '';
+                    }
+                } else {
+                     // Se não for enviado tipo e arquivos, é aceitável para cadastro.
+                     $sucesso = "Estudante cadastrado com sucesso!";
+                     foreach ($_POST as $key => $value) $_POST[$key] = '';
+                }
+
+            } else {
+                $erro = "Erro ao cadastrar estudante. Verifique se a matrícula ou CPF já existem.";
             }
-
-            // === LOG: Estudante criado ===
-            require_once __DIR__ . '/../app/models/Log.php';
-            $log = new Log($db);
-            $log->registrar(
-                $_SESSION['user_id'],
-                'criou_estudante',
-                "Estudante: {$estudante->nome}, Matrícula: {$estudante->matricula}",
-                $novoEstudanteId,
-                'estudantes'
-            );
-            $sucesso = "Estudante cadastrado com sucesso!";
-            foreach ($_POST as $key => $value) $_POST[$key] = '';
-        } else {
-            $erro = "Erro ao cadastrar estudante. Verifique se a matrícula ou CPF já existem.";
         }
     }
 }
@@ -125,12 +172,18 @@ if ($_POST) {
 if (isset($_GET['deletar'])) {
     $estudante->id = (int)$_GET['deletar'];
     $registro = $estudante->buscarPorId($estudante->id);
-    
+
     if ($estudante->deletar()) {
         // Deleta a foto associada, se existir
         if (!empty($registro['foto'])) {
             $estudanteCtrl->deletarFotoAntiga($registro['foto']);
         }
+        // Deleta TODOS os documentos de identidade associados (irá apagar frente e verso de todos os tipos)
+        $docIdentidadeModel->deletarPorEstudanteETipo($estudante->id, 'rg');
+        $docIdentidadeModel->deletarPorEstudanteETipo($estudante->id, 'cnh');
+        $docIdentidadeModel->deletarPorEstudanteETipo($estudante->id, 'passaporte');
+        $docIdentidadeModel->deletarPorEstudanteETipo($estudante->id, 'cpf');
+
         // === LOG: Estudante excluído ===
         require_once __DIR__ . '/../app/models/Log.php';
         $log = new Log($db);
@@ -154,6 +207,18 @@ if (isset($_GET['deletar'])) {
 $editar = null;
 if (isset($_GET['editar'])) {
     $editar = $estudante->buscarPorId((int)$_GET['editar']);
+    // Carregar documentos de identidade para edição (busca por tipo específico ou todos)
+    $docsRG = $docIdentidadeModel->buscarPorEstudanteETipo($editar['id'], 'rg');
+    $docsCNH = $docIdentidadeModel->buscarPorEstudanteETipo($editar['id'], 'cnh');
+    $docsPassaporte = $docIdentidadeModel->buscarPorEstudanteETipo($editar['id'], 'passaporte');
+    $docsCPF = $docIdentidadeModel->buscarPorEstudanteETipo($editar['id'], 'cpf');
+    // Poderia armazenar em arrays associativos para exibição mais fácil
+    $documentosExistentes = [
+        'rg' => $docsRG,
+        'cnh' => $docsCNH,
+        'passaporte' => $docsPassaporte,
+        'cpf' => $docsCPF
+    ];
 }
 
 // ================================
@@ -191,6 +256,7 @@ $estudantes = $estudante->listar();
         a { color: #1976d2; text-decoration: none; }
         a:hover { text-decoration: underline; }
         .voltar { display: inline-block; margin-bottom: 20px; color: #555; }
+        .doc-preview { width: 150px; height: auto; max-height: 100px; object-fit: contain; border: 1px solid #ddd; margin-top: 5px; }
     </style>
 </head>
 <body>
@@ -222,8 +288,8 @@ $estudantes = $estudante->listar();
                     <input type="date" name="data_nascimento" value="<?= htmlspecialchars($editar['data_nascimento'] ?? ($_POST['data_nascimento'] ?? '')) ?>" required>
                 </div>
                 <div class="form-group">
-                    <label>CPF</label>
-                    <input type="text" name="cpf" value="<?= htmlspecialchars($editar['cpf'] ?? ($_POST['cpf'] ?? '')) ?>" placeholder="000.000.000-00">
+                    <label>CPF *</label>
+                    <input type="text" name="cpf" value="<?= htmlspecialchars($editar['cpf'] ?? ($_POST['cpf'] ?? '')) ?>" placeholder="000.000.000-00" required>
                 </div>
             </div>
 
@@ -256,25 +322,44 @@ $estudantes = $estudante->listar();
                 </div>
             </div>
 
-            <!-- Documento de Identidade Digitalizado (Opcional) -->
+            <!-- Documentos de Identidade (Frente e Verso) -->
             <div class="form-row">
                 <div class="form-group">
-                    <label>Documento de Identidade (Digitalizado - Opcional)</label>
-                    <input type="file" name="documento_identidade" accept=".jpg,.jpeg,.png,.pdf">
-                    <?php if ($editar): ?>
-                        <!-- Aqui você pode listar os documentos já anexados, se desejar -->
-                    <?php endif; ?>
+                    <label>Documento de Identidade - Frente</label>
+                    <input type="file" name="doc_identidade_frente" accept=".jpg,.jpeg,.png,.pdf">
+                    <?php if ($editar):
+                        $tipoEdit = $editar['documento_tipo']; // Ou pegar do POST se for erro
+                        if (isset($documentosExistentes[strtolower($tipoEdit)]) && count($documentosExistentes[strtolower($tipoEdit)]) > 0):
+                            $docsDoTipo = $documentosExistentes[strtolower($tipoEdit)];
+                            $docFrente = null;
+                            // Assumindo que o primeiro é a frente e o segundo é o verso (baseado na ordem de inserção)
+                            if (isset($docsDoTipo[0])) $docFrente = $docsDoTipo[0];
+                            if ($docFrente): ?>
+                                <br><small>Arquivo atual (Frente): <?= htmlspecialchars($docFrente['descricao']) ?></small>
+                                <br><a href="../public/<?= htmlspecialchars($docFrente['caminho_arquivo']) ?>" target="_blank">Visualizar Frente</a>
+                            <?php endif;
+                        endif;
+                     endif; ?>
                 </div>
                 <div class="form-group">
-                    <label>Tipo do Documento</label>
-                    <select name="tipo_documento">
-                        <option value="rg" <?= ($editar && ($editar['tipo_documento'] ?? '') === 'rg') ? 'selected' : '' ?>>RG</option>
-                        <option value="cnh" <?= ($editar && ($editar['tipo_documento'] ?? '') === 'cnh') ? 'selected' : '' ?>>CNH</option>
-                        <option value="passaporte" <?= ($editar && ($editar['tipo_documento'] ?? '') === 'passaporte') ? 'selected' : '' ?>>Passaporte</option>
-                        <option value="cpf" <?= ($editar && ($editar['tipo_documento'] ?? '') === 'cpf') ? 'selected' : '' ?>>CPF</option>
-                    </select>
+                    <label>Documento de Identidade - Verso</label>
+                    <input type="file" name="doc_identidade_verso" accept=".jpg,.jpeg,.png,.pdf">
+                    <?php if ($editar):
+                        $tipoEdit = $editar['documento_tipo']; // Ou pegar do POST se for erro
+                        if (isset($documentosExistentes[strtolower($tipoEdit)]) && count($documentosExistentes[strtolower($tipoEdit)]) > 0):
+                            $docsDoTipo = $documentosExistentes[strtolower($tipoEdit)];
+                            $docVerso = null;
+                            if (isset($docsDoTipo[1])) $docVerso = $docsDoTipo[1]; // Assume o segundo como verso
+                            if ($docVerso): ?>
+                                <br><small>Arquivo atual (Verso): <?= htmlspecialchars($docVerso['descricao']) ?></small>
+                                <br><a href="../public/<?= htmlspecialchars($docVerso['caminho_arquivo']) ?>" target="_blank">Visualizar Verso</a>
+                            <?php endif;
+                        endif;
+                     endif; ?>
                 </div>
             </div>
+
+
 
             <hr>
 
