@@ -53,6 +53,11 @@ if ($_POST) {
          $erro = "Tipo de documento de identidade inválido.";
     }
 
+    // Validação da selfie com documento
+    if (empty($_FILES['selfie_documento']['name'])) {
+        $erro = "É obrigatório anexar a selfie segurando o documento.";
+    }
+
 
     if (empty($erro)) {
         // Verifica se CPF ou matrícula já existem
@@ -123,7 +128,19 @@ if ($_POST) {
                                 // $estudante->id = $estudanteId; $estudante->deletar();
                                 // $inscricao->id = $inscricaoId; $inscricao->deletar();
                             } else {
-                                $sucesso = "Inscrição realizada com sucesso!";
+                                // Salvar selfie com o documento - OBRIGATÓRIO
+                                // Usar o modelo DocumentoEstudante para salvar a selfie
+                                if (!empty($_FILES['selfie_documento']['name'])) {
+                                    if ($docIdentidadeModel->salvarUnicoArquivo($estudanteId, $_FILES['selfie_documento'], 'selfie_documento')) {
+                                        $sucesso = "Inscrição realizada com sucesso!";
+                                    } else {
+                                        $erro = "Erro ao salvar a selfie com o documento.";
+                                        // Opcional: lidar com falha na selfie (ex: rollback da inscrição?)
+                                    }
+                                } else {
+                                     // Este else não deveria ser atingido devido à validação inicial, mas mantido por segurança
+                                     $erro = "Erro interno: Selfie com documento não fornecida.";
+                                }
                             }
                         } else {
                             // Este else não deveria ser atingido devido à validação inicial, mas mantido por segurança
@@ -219,8 +236,8 @@ if ($_POST) {
 
                 <div class="form-row">
                     <div class="form-group">
-                        <label>Foto 3x4 (JPG, PNG) (Opcional)</label>
-                        <input type="file" name="foto" accept=".jpg,.jpeg,.png">
+                        <label>Foto 3x4 (JPG, PNG)</label>
+                        <input type="file" name="foto" accept=".jpg,.jpeg,.png" required>
                     </div>
                 </div>
 
@@ -236,6 +253,14 @@ if ($_POST) {
                     </div>
                 </div>
 
+                <!-- Selfie com Documento -->
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Selfie segurando o Documento *</label>
+                        <input type="file" name="selfie_documento" accept=".jpg,.jpeg,.png" required>
+                        <small>Envie uma foto clara mostrando seu rosto e o documento original.</small>
+                    </div>
+                </div>
 
                 <!-- Dados Acadêmicos -->
                 <h3>Dados Acadêmicos</h3>
@@ -275,11 +300,11 @@ if ($_POST) {
                 </div>
 
                 <!-- Contato -->
-                <h3>Contato (Opcional)</h3>
+                <h3>Contato</h3>
                 <div class="form-row">
                     <div class="form-group">
-                        <label>E-mail</label>
-                        <input type="email" name="email" value="<?= htmlspecialchars($_POST['email'] ?? '') ?>">
+                        <label>E-mail *</label>
+                        <input type="email" name="email" value="<?= htmlspecialchars($_POST['email'] ?? '') ?>" required>
                     </div>
                     <div class="form-group">
                         <label>Telefone</label>

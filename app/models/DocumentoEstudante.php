@@ -101,6 +101,52 @@ class DocumentoEstudante {
     }
 
     /**
+     * Salva um único arquivo (como a selfie) para um estudante.
+     * @param int $estudante_id ID do estudante
+     * @param array $file Arquivo ($_FILES['campo_do_formulario'])
+     * @param string $tipo Tipo do documento ('selfie_documento', etc.) - Deve estar no ENUM da tabela.
+     * @return bool True se salvo com sucesso, False caso contrário
+     */
+    public function salvarUnicoArquivo($estudante_id, $file, $tipo) {
+        if (!$file || $file['error'] !== UPLOAD_ERR_OK) {
+            return false;
+        }
+
+        // Tipos permitidos devem corresponder ao ENUM atualizado na tabela
+        // Por segurança, você pode definir uma lista interna ou buscar do banco, mas por enquanto, assumimos que o tipo é válido se passar pelo ENUM do DB.
+        // $tiposPermitidos = ['rg', 'cnh', 'passaporte', 'cpf', 'selfie_documento']; // Exemplo fixo
+        // if (!in_array(strtolower($tipo), $tiposPermitidos)) {
+        //     return false;
+        // }
+
+        $allowed = ['jpg', 'jpeg', 'png', 'pdf'];
+        $ext = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
+        if (!in_array($ext, $allowed)) {
+            return false;
+        }
+
+        $nome = "doc_{$tipo}_" . uniqid() . '.' . $ext;
+        $caminhoAbsoluto = __DIR__ . "/../../public/uploads/documentos_estudante/{$nome}";
+
+        if (!is_dir(dirname($caminhoAbsoluto))) {
+            mkdir(dirname($caminhoAbsoluto), 0777, true);
+        }
+
+        if (move_uploaded_file($file['tmp_name'], $caminhoAbsoluto)) {
+            $query = "INSERT INTO {$this->table} (estudante_id, tipo, caminho_arquivo, descricao)
+                      VALUES (:estudante_id, :tipo, :caminho_arquivo, :descricao)";
+            $stmt = $this->conn->prepare($query);
+            $stmt->bindValue(':estudante_id', $estudante_id, PDO::PARAM_INT);
+            $stmt->bindValue(':tipo', $tipo);
+            $stmt->bindValue(':caminho_arquivo', "uploads/documentos_estudante/{$nome}");
+            $stmt->bindValue(':descricao', $file['name']);
+            return $stmt->execute();
+        }
+        return false;
+    }
+
+
+    /**
      * Busca documentos de um estudante por tipo.
      * @param int $estudante_id ID do estudante
      * @param string $tipo Tipo do documento
