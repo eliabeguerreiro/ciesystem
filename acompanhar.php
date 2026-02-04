@@ -12,40 +12,31 @@ $resultado = null;
 $erro = '';
 
 // ================================
-// BUSCA POR CÓDIGO DE INSCRIÇÃO OU CPF
+// BUSCA POR CÓDIGO DE INSCRIÇÃO E DATA DE NASCIMENTO
 // ================================
 if ($_POST) {
     $codigo = trim($_POST['codigo'] ?? '');
-    $cpf = preg_replace('/[^0-9]/', '', $_POST['cpf'] ?? '');
+    $dataNascimento = $_POST['data_nascimento'] ?? ''; // Novo campo
 
-    if (!empty($codigo)) {
-        // Busca por código de inscrição
-        $query = "SELECT i.*, e.nome, e.matricula 
-                  FROM inscricoes i 
-                  INNER JOIN estudantes e ON i.estudante_id = e.id 
-                  WHERE i.codigo_inscricao = :codigo";
+    if (!empty($codigo) && !empty($dataNascimento)) { // Agora exige ambos
+        // Busca por código de inscrição e data de nascimento
+        $query = "SELECT i.*, e.nome, e.matricula, e.data_nascimento -- Inclui a data para verificação extra
+                  FROM inscricoes i
+                  INNER JOIN estudantes e ON i.estudante_id = e.id
+                  WHERE i.codigo_inscricao = :codigo AND e.data_nascimento = :data_nascimento"; // Condição adicionada
+
         $stmt = $db->prepare($query);
         $stmt->bindParam(':codigo', $codigo);
-        $stmt->execute();
-        $resultado = $stmt->fetch(PDO::FETCH_ASSOC);
-    } elseif (!empty($cpf)) {
-        // Busca por CPF
-        $query = "SELECT i.*, e.nome, e.matricula 
-                  FROM inscricoes i 
-                  INNER JOIN estudantes e ON i.estudante_id = e.id 
-                  WHERE e.cpf = :cpf 
-                  ORDER BY i.id DESC LIMIT 1";
-        $stmt = $db->prepare($query);
-        $stmt->bindParam(':cpf', $cpf);
+        $stmt->bindParam(':data_nascimento', $dataNascimento); // Novo bind
         $stmt->execute();
         $resultado = $stmt->fetch(PDO::FETCH_ASSOC);
     } else {
-        $erro = "Informe o código de inscrição ou CPF.";
+        $erro = "Informe o código de inscrição e sua data de nascimento.";
     }
 
     // Se não encontrou, mostra mensagem genérica (evita enumeração)
     if (!$resultado && empty($erro)) {
-        $erro = "Inscrição não encontrada. Verifique os dados ou entre em contato com a administração.";
+        $erro = "Inscrição não encontrada ou dados incorretos. Verifique os dados ou entre em contato com a administração.";
     }
 }
 ?>
@@ -86,12 +77,11 @@ if ($_POST) {
                 <h3>Olá, <?= htmlspecialchars($resultado['nome']) ?>!</h3>
                 <p><strong>Código da Inscrição:</strong> <?= htmlspecialchars($resultado['codigo_inscricao']) ?></p>
                 <p><strong>Matrícula:</strong> <?= htmlspecialchars($resultado['matricula']) ?></p>
-                <p><strong>Status Atual:</strong> 
+                <p><strong>Status Atual:</strong>
                     <span class="status-<?= $resultado['situacao'] ?>">
                         <?= ucfirst(str_replace('_', ' ', $resultado['situacao'])) ?>
                     </span>
                 </p>
-
                 <!-- Mensagens orientativas -->
                 <?php
                 switch ($resultado['situacao']) {
@@ -124,13 +114,14 @@ if ($_POST) {
 
             <form method="POST">
                 <div class="form-group">
-                    <label>Código de Inscrição</label>
-                    <input type="text" name="codigo" placeholder="Ex: a1b2c3d4-e5f6..." value="<?= htmlspecialchars($_POST['codigo'] ?? '') ?>">
+                    <label>Código de Inscrição *</label>
+                    <input type="text" name="codigo" placeholder="Ex: a1b2c3d4-e5f6..." value="<?= htmlspecialchars($_POST['codigo'] ?? '') ?>" required>
                 </div>
                 <div class="form-group">
-                    <label>OU CPF</label>
-                    <input type="text" name="cpf" placeholder="000.000.000-00" value="<?= htmlspecialchars($_POST['cpf'] ?? '') ?>">
+                    <label>Data de Nascimento *</label>
+                    <input type="date" name="data_nascimento" value="<?= htmlspecialchars($_POST['data_nascimento'] ?? '') ?>" required>
                 </div>
+                <!-- Removido o campo CPF -->
                 <button type="submit">Consultar Status</button>
             </form>
             <a href="index.php">← Voltar ao início</a>
