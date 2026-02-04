@@ -1,0 +1,1404 @@
+ALL PHP FILES - export generated on 2026-02-03
+
+--- location: c:\laragon\www\ciesytem\index.php ---
+<?php
+// Página pública — sem sessão, sem login
+?>
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Sistema de Inscrição - CIE</title>
+    <style>
+        body { font-family: sans-serif; margin: 0; padding: 40px; background: #f5f5f5; }
+        .container { max-width: 800px; margin: 0 auto; text-align: center; }
+        h1 { color: #1976d2; }
+        .btn {
+            display: inline-block;
+            margin: 20px 10px;
+            padding: 12px 24px;
+            background: #1976d2;
+            color: white;
+            text-decoration: none;
+            border-radius: 4px;
+            font-size: 16px;
+        }
+        .btn:hover { background: #1565c0; }
+        .info { background: white; padding: 20px; border-radius: 8px; margin-top: 30px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Carteira de Identificação Estudantil (CIE)</h1>
+        <p>Bem-vindo ao sistema de inscrição para a CIE.</p>
+        
+        <a href="inscricao.php" class="btn">Quero minha CIE</a>
+        <a href="acompanhar.php" class="btn">Acompanhar Inscrição</a>
+
+        <div class="info">
+            <h3>Como funciona?</h3>
+            <p>1. Preencha seus dados e anexe seu comprovante de matrícula<br>
+               2. Aguarde a validação pela equipe<br>
+               3. Após aprovação, realize o pagamento<br>
+               4. Sua CIE será emitida</p>
+        </div>
+    </div>
+</body>
+</html>
+
+--- location: c:\laragon\www\ciesytem\inscricao.php ---
+<?php
+// Sem sessão, sem autenticação — acesso público
+require_once __DIR__ . '/app/config/database.php';
+require_once __DIR__ . '/app/models/Estudante.php';
+require_once __DIR__ . '/app/models/Inscricao.php';
+
+$database = new Database();
+$db = $database->getConnection();
+
+$estudanteModel = new Estudante($db);
+$inscricaoModel = new Inscricao($db);
+
+$erro = '';
+$sucesso = '';
+$codigoGerado = '';
+
+// ================================
+// PROCESSAMENTO DO FORMULÁRIO
+// ================================
+if ($_POST) {
+    // Valida campos obrigatórios
+    $camposObrigatorios = ['nome', 'data_nascimento', 'cpf', 'documento_tipo', 'documento_numero', 
+                          'instituicao', 'curso', 'nivel', 'matricula'];
+    foreach ($camposObrigatorios as $campo) {
+        if (empty($_POST[$campo])) {
+            $erro = "O campo '$campo' é obrigatório.";
+            break;
+        }
+    }
+
+    // Verifica se comprovante de matrícula foi enviado
+    if (empty($_FILES['comprovante_matricula']['name'])) {
+        $erro = "Comprovante de matrícula é obrigatório.";
+    }
+
+    if (empty($erro)) {
+        // Verifica se CPF ou matrícula já existem
+        $stmt = $db->prepare("SELECT id FROM estudantes WHERE cpf = ? OR matricula = ?");
+        $stmt->execute([$_POST['cpf'], $_POST['matricula']]);
+        if ($stmt->fetch()) {
+            $erro = "CPF ou matrícula já cadastrados. Entre em contato com a administração.";
+        } else {
+            // Cria estudante
+            $estudante = new Estudante($db);
+            $estudante->nome = $_POST['nome'];
+            $estudante->data_nascimento = $_POST['data_nascimento'];
+            $estudante->cpf = $_POST['cpf'];
+            $estudante->documento_tipo = $_POST['documento_tipo'];
+            $estudante->documento_numero = $_POST['documento_numero'];
+            $estudante->documento_orgao = $_POST['documento_orgao'] ?? '';
+            $estudante->instituicao = $_POST['instituicao'];
+            $estudante->campus = $_POST['campus'] ?? '';
+            $estudante->curso = $_POST['curso'];
+            $estudante->nivel = $_POST['nivel'];
+            $estudante->matricula = $_POST['matricula'];
+            $estudante->situacao_academica = $_POST['situacao_academica'] ?? 'Matriculado';
+            $estudante->email = $_POST['email'] ?? '';
+            $estudante->telefone = $_POST['telefone'] ?? '';
+            $estudante->status_validacao = 'pendente'; // ← diferente do cadastro manual
+
+            if ($estudante->criar()) {
+                $estudanteId = $db->lastInsertId();
+
+                // Cria inscrição
+                $inscricao = new Inscricao($db);
+                $inscricao->estudante_id = $estudanteId;
+                $inscricao->criar(); // cria com status 'aguardando_validacao'
+
+                // Obter ID da inscrição
+                $stmt = $db->prepare("SELECT id, codigo_inscricao FROM inscricoes WHERE estudante_id = ? ORDER BY id DESC LIMIT 1");
+                $stmt->execute([$estudanteId]);
+                $resultado = $stmt->fetch();
+                if ($resultado) {
+                    $inscricaoId = $resultado['id'];
+                    $codigoGerado = $resultado['codigo_inscricao'];
+
+                    // Salvar comprovante de matrícula
+                    if (!empty($_FILES['comprovante_matricula']['name'])) {
+                        $inscTemp = new Inscricao($db);
+                        $inscTemp->id = $inscricaoId;
+                        $inscTemp->salvarDocumentos($_FILES['comprovante_matricula'], 'matricula');
+                    }
+
+                    $sucesso = "Inscrição realizada com sucesso!";
+                } else {
+                    $erro = "Erro ao gerar inscrição.";
+                }
+            } else {
+                $erro = "Erro ao cadastrar seus dados.";
+            }
+        }
+    }
+}
+?>
+
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Inscrição para CIE</title>
+    <style>
+        body { font-family: sans-serif; margin: 0; padding: 20px; background: #f9f9f9; }
+        .container { max-width: 800px; margin: 0 auto; background: white; padding: 30px; border-radius: 8px; }
+        h2 { color: #1976d2; text-align: center; }
+        .mensagem { padding: 10px; margin: 15px 0; border-radius: 4px; }
+        .erro { background: #ffebee; color: #c62828; }
+        .sucesso { background: #e8f5e9; color: #2e7d32; }
+        .form-row { display: flex; flex-wrap: wrap; gap: 15px; margin-bottom: 15px; }
+        .form-group { flex: 1; min-width: 200px; }
+        label { display: block; margin-bottom: 4px; font-weight: bold; font-size: 0.9em; }
+        input, select { width: 10; padding: 8px; border: 1px solid #ccc; border-radius: 4px; }
+        button { background: #1976d2; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; width: 100%; margin-top: 10px; }
+        button:hover { background: #1565c0; }
+        a { color: #1976d2; text-decoration: none; display: inline-block; margin-top: 20px; }
+        a:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>Inscrição para Carteira Estudantil (CIE)</h2>
+
+        <?php if ($sucesso): ?>
+            <div class="mensagem sucesso">
+                <?= htmlspecialchars($sucesso) ?><br>
+                <strong>Seu código de inscrição:</strong> <?= htmlspecialchars($codigoGerado) ?><br>
+                <small>Guarde este código para acompanhar seu status.</small>
+            </div>
+            <a href="acompanhar.php">Acompanhar minha inscrição</a>
+        <?php else: ?>
+            <?php if ($erro): ?>
+                <div class="mensagem erro"><?= htmlspecialchars($erro) ?></div>
+            <?php endif; ?>
+
+            <form method="POST" enctype="multipart/form-data">
+                <!-- Dados Civis -->
+                <h3>Dados Pessoais</h3>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Nome Completo *</label>
+                        <input type="text" name="nome" value="<?= htmlspecialchars($_POST['nome'] ?? '') ?>" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Data de Nascimento *</label>
+                        <input type="date" name="data_nascimento" value="<?= htmlspecialchars($_POST['data_nascimento'] ?? '') ?>" required>
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>CPF *</label>
+                        <input type="text" name="cpf" value="<?= htmlspecialchars($_POST['cpf'] ?? '') ?>" placeholder="000.000.000-00" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Tipo de Documento *</label>
+                        <select name="documento_tipo" required>
+                            <option value="RG" <?= ($_POST['documento_tipo'] ?? '') === 'RG' ? 'selected' : '' ?>>RG</option>
+                            <option value="CNH" <?= ($_POST['documento_tipo'] ?? '') === 'CNH' ? 'selected' : '' ?>>CNH</option>
+                            <option value="PASSAPORTE" <?= ($_POST['documento_tipo'] ?? '') === 'PASSAPORTE' ? 'selected' : '' ?>>Passaporte</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Número do Documento *</label>
+                        <input type="text" name="documento_numero" value="<?= htmlspecialchars($_POST['documento_numero'] ?? '') ?>" required>
+                    </div>
+                </div>
+
+                <!-- Dados Acadêmicos -->
+                <h3>Dados Acadêmicos</h3>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Instituição *</label>
+                        <input type="text" name="instituicao" value="<?= htmlspecialchars($_POST['instituicao'] ?? '') ?>" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Campus</label>
+                        <input type="text" name="campus" value="<?= htmlspecialchars($_POST['campus'] ?? '') ?>">
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Curso *</label>
+                        <input type="text" name="curso" value="<?= htmlspecialchars($_POST['curso'] ?? '') ?>" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Nível *</label>
+                        <input type="text" name="nivel" value="<?= htmlspecialchars($_POST['nivel'] ?? '') ?>" placeholder="Ex: Técnico, Superior" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Matrícula *</label>
+                        <input type="text" name="matricula" value="<?= htmlspecialchars($_POST['matricula'] ?? '') ?>" required>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>Situação Acadêmica</label>
+                    <select name="situacao_academica">
+                        <option value="Matriculado" <?= ($_POST['situacao_academica'] ?? 'Matriculado') === 'Matriculado' ? 'selected' : '' ?>>Matriculado</option>
+                        <option value="Trancado" <?= ($_POST['situacao_academica'] ?? '') === 'Trancado' ? 'selected' : '' ?>>Trancado</option>
+                        <option value="Formado" <?= ($_POST['situacao_academica'] ?? '') === 'Formado' ? 'selected' : '' ?>>Formado</option>
+                    </select>
+                </div>
+
+                <!-- Contato -->
+                <h3>Contato (Opcional)</h3>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>E-mail</label>
+                        <input type="email" name="email" value="<?= htmlspecialchars($_POST['email'] ?? '') ?>">
+                    </div>
+                    <div class="form-group">
+                        <label>Telefone</label>
+                        <input type="text" name="telefone" value="<?= htmlspecialchars($_POST['telefone'] ?? '') ?>" placeholder="(00) 00000-0000">
+                    </div>
+                </div>
+
+                <!-- Comprovante de Matrícula -->
+                <h3>Comprovante de Matrícula *</h3>
+                <div class="form-group">
+                    <label>Anexe seu comprovante (JPG, PNG ou PDF)</label>
+                    <input type="file" name="comprovante_matricula" accept=".jpg,.jpeg,.png,.pdf" required>
+                </div>
+
+                <button type="submit">Enviar Inscrição</button>
+            </form>
+            <a href="index.php">← Voltar</a>
+        <?php endif; ?>
+    </div>
+</body>
+</html>
+
+--- location: c:\laragon\www\ciesytem\acompanhar.php ---
+<?php
+// Acesso público — sem autenticação
+require_once __DIR__ . '/app/config/database.php';
+require_once __DIR__ . '/app/models/Estudante.php';
+require_once __DIR__ . '/app/models/Inscricao.php';
+
+$database = new Database();
+$db = $database->getConnection();
+$inscricaoModel = new Inscricao($db);
+
+$resultado = null;
+$erro = '';
+
+// ================================
+// BUSCA POR CÓDIGO DE INSCRIÇÃO OU CPF
+// ================================
+if ($_POST) {
+    $codigo = trim($_POST['codigo'] ?? '');
+    $cpf = preg_replace('/[^0-9]/', '', $_POST['cpf'] ?? '');
+
+    if (!empty($codigo)) {
+        // Busca por código de inscrição
+        $query = "SELECT i.*, e.nome, e.matricula 
+                  FROM inscricoes i 
+                  INNER JOIN estudantes e ON i.estudante_id = e.id 
+                  WHERE i.codigo_inscricao = :codigo";
+        $stmt = $db->prepare($query);
+        $stmt->bindParam(':codigo', $codigo);
+        $stmt->execute();
+        $resultado = $stmt->fetch(PDO::FETCH_ASSOC);
+    } elseif (!empty($cpf)) {
+        // Busca por CPF
+        $query = "SELECT i.*, e.nome, e.matricula 
+                  FROM inscricoes i 
+                  INNER JOIN estudantes e ON i.estudante_id = e.id 
+                  WHERE e.cpf = :cpf 
+                  ORDER BY i.id DESC LIMIT 1";
+        $stmt = $db->prepare($query);
+        $stmt->bindParam(':cpf', $cpf);
+        $stmt->execute();
+        $resultado = $stmt->fetch(PDO::FETCH_ASSOC);
+    } else {
+        $erro = "Informe o código de inscrição ou CPF.";
+    }
+
+    // Se não encontrou, mostra mensagem genérica (evita enumeração)
+    if (!$resultado && empty($erro)) {
+        $erro = "Inscrição não encontrada. Verifique os dados ou entre em contato com a administração.";
+    }
+}
+?>
+
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Acompanhar Inscrição</title>
+    <style>
+        body { font-family: sans-serif; margin: 0; padding: 20px; background: #f9f9f9; }
+        .container { max-width: 600px; margin: 0 auto; background: white; padding: 30px; border-radius: 8px; }
+        h2 { color: #1976d2; text-align: center; margin-bottom: 30px; }
+        .form-group { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 4px; font-weight: bold; }
+        input { width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; }
+        button { background: #1976d2; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; width: 100%; }
+        button:hover { background: #1565c0; }
+        .status-box { background: #f5f5f5; padding: 15px; border-radius: 6px; margin-top: 20px; }
+        .status-pendente,
+        .status-aguardando_validacao { color: #f57c00; }
+        .status-dados_aprovados,
+        .status-pagamento_pendente { color: #f57c00; font-weight: bold; }
+        .status-documentos_anexados { color: #5d4037; font-weight: bold; }
+        .status-pago { color: #2e7d32; font-weight: bold; }
+        .status-cie_emitida { color: #1565c0; font-weight: bold; }
+        a { color: #1976d2; text-decoration: none; display: inline-block; margin-top: 20px; }
+        a:hover { text-decoration: underline; }
+        .erro { background: #ffebee; color: #c62828; padding: 10px; border-radius: 4px; margin: 10px 0; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>Acompanhar Minha Inscrição</h2>
+
+        <?php if ($resultado): ?>
+            <div class="status-box">
+                <h3>Olá, <?= htmlspecialchars($resultado['nome']) ?>!</h3>
+                <p><strong>Código da Inscrição:</strong> <?= htmlspecialchars($resultado['codigo_inscricao']) ?></p>
+                <p><strong>Matrícula:</strong> <?= htmlspecialchars($resultado['matricula']) ?></p>
+                <p><strong>Status Atual:</strong> 
+                    <span class="status-<?= $resultado['situacao'] ?>">
+                        <?= ucfirst(str_replace('_', ' ', $resultado['situacao'])) ?>
+                    </span>
+                </p>
+
+                <!-- Mensagens orientativas -->
+                <?php
+                switch ($resultado['situacao']) {
+                    case 'aguardando_validacao':
+                        echo '<p style="color:#f57c00;">Sua inscrição está em análise. Aguarde a validação dos documentos.</p>';
+                        break;
+                    case 'dados_aprovados':
+                    case 'pagamento_pendente':
+                        echo '<p style="color:#f57c00;">Seus dados foram Registrados Aguarde aprovação dos dados de matricula e instruções para pagamento.</p>';
+                        break;
+                    case 'documentos_anexados':
+                        echo '<p style="color:#5d4037;">Documentos recebidos. Aguardando confirmação de pagamento.</p>';
+                        break;
+                    case 'pago':
+                        echo '<p style="color:#2e7d32;">Pagamento confirmado! Sua CIE será emitida em breve.</p>';
+                        break;
+                    case 'cie_emitida':
+                        echo '<p style="color:#1565c0;"><strong>Sua CIE já foi emitida!</strong> Entre em contato para retirada.</p>';
+                        break;
+                    default:
+                        echo '<p>Em processamento...</p>';
+                }
+                ?>
+            </div>
+            <a href="index.php">← Voltar ao início</a>
+        <?php else: ?>
+            <?php if ($erro): ?>
+                <div class="erro"><?= htmlspecialchars($erro) ?></div>
+            <?php endif; ?>
+
+            <form method="POST">
+                <div class="form-group">
+                    <label>Código de Inscrição</label>
+                    <input type="text" name="codigo" placeholder="Ex: a1b2c3d4-e5f6..." value="<?= htmlspecialchars($_POST['codigo'] ?? '') ?>">
+                </div>
+                <div class="form-group">
+                    <label>OU CPF</label>
+                    <input type="text" name="cpf" placeholder="000.000.000-00" value="<?= htmlspecialchars($_POST['cpf'] ?? '') ?>">
+                </div>
+                <button type="submit">Consultar Status</button>
+            </form>
+            <a href="index.php">← Voltar ao início</a>
+        <?php endif; ?>
+    </div>
+</body>
+</html>
+
+--- location: c:\laragon\www\ciesytem\app\config\database.php ---
+<?php
+// config/database.php
+class Database {
+    private $host = '127.0.0.1:3333';
+    private $db_name = 'ciesytem';
+    private $username = 'root';      // ajuste conforme seu ambiente
+    private $password = 'hants12';          // ajuste conforme seu ambiente
+    public $conn;
+
+    public function getConnection() {
+        $this->conn = null;
+        try {
+            $this->conn = new PDO(
+                "mysql:host=" . $this->host . ";dbname=" . $this->db_name . ";charset=utf8mb4",
+                $this->username,
+                $this->password,
+                [
+                    PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+                    PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC
+                ]
+            );
+        } catch(PDOException $e) {
+            echo "Erro na conexão: " . $e->getMessage();
+        }
+        return $this->conn;
+    }
+}
+?>
+
+--- location: c:\laragon\www\ciesytem\app\models\Usuario.php ---
+<?php
+// app/models/Usuario.php
+require_once __DIR__ . '/../config/database.php';
+
+class Usuario {
+    private $conn;
+    private $table = 'usuarios';
+
+    public $id;
+    public $nome;
+    public $email;
+    public $senha;
+    public $tipo;
+
+    public function __construct($db) {
+        $this->conn = $db;
+    }
+
+    // Verifica login
+    public function login($email) {
+        $query = "SELECT id, nome, email, senha, tipo FROM " . $this->table . " WHERE email = :email LIMIT 1";
+        $stmt = $this->conn->prepare($query);
+        $stmt->bindParam(':email', $email);
+        $stmt->execute();
+        return $stmt->fetch();
+    }
+
+    // Lista todos os usuários (exceto senhas)
+    public function listar() {
+        $query = "SELECT id, nome, email, tipo FROM " . $this->table;
+        $stmt = $this->conn->prepare($query);
+        $stmt->execute();
+        return $stmt->fetchAll();
+    }
+
+    // Cria novo usuário
+    public function criar() {
+        $query = "INSERT INTO " . $this->table . " (nome, email, senha, tipo) VALUES (:nome, :email, :senha, :tipo)";
+        $stmt = $this->conn->prepare($query);
+
+        $this->nome = htmlspecialchars(strip_tags($this->nome));
+        $this->email = htmlspecialchars(strip_tags($this->email));
+        $this->senha = password_hash($this->senha, PASSWORD_DEFAULT);
+        $this->tipo = htmlspecialchars(strip_tags($this->tipo));
+
+        $stmt->bindParam(':nome', $this->nome);
+        $stmt->bindParam(':email', $this->email);
+        $stmt->bindParam(':senha', $this->senha);
+        $stmt->bindParam(':tipo', $this->tipo);
+
+        return $stmt->execute();
+    }
+
+    // Atualiza usuário (sem expor a senha)
+    public function atualizar() {
+        $query = "UPDATE " . $this->table . " SET nome = :nome, email = :email, tipo = :tipo";
+        $params = [':nome' => $this->nome, ':email' => $this->email, ':tipo' => $this->tipo];
+
+        if (!empty($this->senha)) {
+            $query .= ", senha = :senha";
+            $params[':senha'] = password_hash($this->senha, PASSWORD_DEFAULT);
+        }
+
+        $query .= " WHERE id = :id";
+        $params[':id'] = $this->id;
+
+        $stmt = $this->conn->prepare($query);
+        foreach ($params as $key => $value) {
+            $stmt->bindValue($key, $value);
+        }
+
+        return $stmt->execute();
+    }
+
+    // Deleta usuário
+    public function deletar() {
+        $query = "DELETE FROM " . $this->table . " WHERE id = :id";
+        $stmt = $this->conn->prepare($query);
+        $stmt->bindParam(':id', $this->id);
+        return $stmt->execute();
+    }
+
+    // Busca usuário por ID
+    public function buscarPorId($id) {
+        $query = "SELECT id, nome, email, tipo FROM " . $this->table . " WHERE id = :id";
+        $stmt = $this->conn->prepare($query);
+        $stmt->bindParam(':id', $id);
+        $stmt->execute();
+        return $stmt->fetch();
+    }
+}
+
+--- location: c:\laragon\www\ciesytem\app\models\Log.php ---
+<?php
+require_once __DIR__ . '/../config/database.php';
+
+class Log {
+    private $conn;
+    private $table = 'logs';
+
+    public function __construct($db) {
+        $this->conn = $db;
+    }
+
+    public function registrar($user_id, $acao, $descricao = null, $registro_id = null, $tabela = null) {
+        $query = "INSERT INTO {$this->table} (user_id, acao, descricao, registro_id, tabela) 
+                  VALUES (:user_id, :acao, :descricao, :registro_id, :tabela)";
+        $stmt = $this->conn->prepare($query);
+
+        $stmt->bindParam(':user_id', $user_id, PDO::PARAM_INT);
+        $stmt->bindParam(':acao', $acao);
+        $stmt->bindParam(':descricao', $descricao);
+        $stmt->bindParam(':registro_id', $registro_id, PDO::PARAM_INT);
+        $stmt->bindParam(':tabela', $tabela);
+
+        return $stmt->execute();
+    }
+}
+?>
+
+--- location: c:\laragon\www\ciesytem\app\models\Inscricao.php ---
+<?php
+require_once __DIR__ . '/../config/database.php';
+
+class Inscricao {
+    private $conn;
+    private $table = 'inscricoes';
+
+    public $id;
+    public $estudante_id;
+    public $codigo_inscricao;
+    public $data_validade;
+    public $situacao;
+
+    public function __construct($db) {
+        $this->conn = $db;
+    }
+
+    // Gera código único (UUID v4)
+    private function gerarCodigoUnico() {
+        return sprintf('%04x%04x-%04x-%04x-%04x-%04x%04x%04x',
+            mt_rand(0, 0xffff), mt_rand(0, 0xffff),
+            mt_rand(0, 0xffff),
+            mt_rand(0, 0x0fff) | 0x4000,
+            mt_rand(0, 0x3fff) | 0x8000,
+            mt_rand(0, 0xffff), mt_rand(0, 0xffff), mt_rand(0, 0xffff)
+        );
+    }
+
+    // Cria nova inscrição
+    public function criar() {
+        $this->codigo_inscricao = $this->gerarCodigoUnico();
+        $this->data_validade = (date('Y') + 1) . '-03-31';
+        $this->situacao = 'pagamento_pendente'; // ← ajustado para novo fluxo
+        
+        $query = "INSERT INTO {$this->table} (
+            estudante_id, codigo_inscricao, data_validade, situacao
+        ) VALUES (
+            :estudante_id, :codigo_inscricao, :data_validade, :situacao
+        )";
+
+        $stmt = $this->conn->prepare($query);
+        $stmt->bindParam(':estudante_id', $this->estudante_id, PDO::PARAM_INT);
+        $stmt->bindParam(':codigo_inscricao', $this->codigo_inscricao);
+        $stmt->bindParam(':data_validade', $this->data_validade);
+        $stmt->bindParam(':situacao', $this->situacao);
+
+        return $stmt->execute();
+    }
+
+    // Salva múltiplos documentos vinculados à inscrição
+    public function salvarDocumentos($documentos, $tipo) {
+        // Valida inputs mínimos
+        if (empty($documentos) || empty($this->id)) return true;
+
+        // Normaliza para suportar input único ou múltiplo (a tag <input> sem [] traz strings)
+        if (!isset($documentos['name'])) return true;
+        if (!is_array($documentos['name'])) {
+            $documentos = [
+                'name' => [$documentos['name']],
+                'type' => isset($documentos['type']) ? [$documentos['type']] : [''],
+                'tmp_name' => isset($documentos['tmp_name']) ? [$documentos['tmp_name']] : [''],
+                'error' => isset($documentos['error']) ? [$documentos['error']] : [UPLOAD_ERR_NO_FILE],
+                'size' => isset($documentos['size']) ? [$documentos['size']] : [0],
+            ];
+        }
+
+        if (empty($documentos['name'][0])) return true;
+
+        $allowed = ['jpg', 'jpeg', 'png', 'pdf'];
+        $query = "INSERT INTO documentos_inscricao (inscricao_id, tipo, caminho_arquivo, descricao) 
+                  VALUES (:inscricao_id, :tipo, :caminho_arquivo, :descricao)";
+        $stmt = $this->conn->prepare($query);
+
+        foreach ($documentos['name'] as $index => $nomeOriginal) {
+            if (!isset($documentos['error'][$index]) || $documentos['error'][$index] !== UPLOAD_ERR_OK) continue;
+            if (!isset($documentos['tmp_name'][$index]) || $documentos['tmp_name'][$index] === '') continue;
+
+            $ext = strtolower(pathinfo($nomeOriginal, PATHINFO_EXTENSION));
+            if (!in_array($ext, $allowed)) continue;
+
+            $nomeUnico = "doc_{$tipo}_" . uniqid() . '.' . $ext;
+            $subdir = $tipo === 'pagamento' ? 'pagamento' : 'matricula';
+            $caminhoAbsoluto = __DIR__ . "/../../public/uploads/comprovantes/{$subdir}/{$nomeUnico}";
+
+            if (!is_dir(dirname($caminhoAbsoluto))) {
+                mkdir(dirname($caminhoAbsoluto), 0777, true);
+            }
+
+            if (move_uploaded_file($documentos['tmp_name'][$index], $caminhoAbsoluto)) {
+                $caminhoRelativo = "uploads/comprovantes/{$subdir}/{$nomeUnico}";
+                // Usa bindValue para evitar referência entre execuções
+                $stmt->bindValue(':inscricao_id', $this->id, PDO::PARAM_INT);
+                $stmt->bindValue(':tipo', $tipo);
+                $stmt->bindValue(':caminho_arquivo', $caminhoRelativo);
+                $stmt->bindValue(':descricao', $nomeOriginal);
+                $stmt->execute();
+            }
+        }
+        return true;
+    }
+
+    // Busca documentos da inscrição — SEMPRE retorna array
+    public function getDocumentos() {
+        if (empty($this->id)) {
+            return [];
+        }
+
+        $query = "SELECT * FROM documentos_inscricao WHERE inscricao_id = :inscricao_id ORDER BY tipo, criado_em";
+        $stmt = $this->conn->prepare($query);
+        $stmt->bindParam(':inscricao_id', $this->id, PDO::PARAM_INT);
+        
+        try {
+            $stmt->execute();
+            $result = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            return $result ?: [];
+        } catch (Exception $e) {
+            return [];
+        }
+    }
+
+    // Lista inscrições com dados do estudante
+    public function listarComEstudantes() {
+        $query = "
+            SELECT 
+                i.*, 
+                e.nome AS estudante_nome, 
+                e.matricula AS estudante_matricula,
+                e.curso AS estudante_curso
+            FROM inscricoes i
+            INNER JOIN estudantes e ON i.estudante_id = e.id
+            ORDER BY i.id DESC
+        ";
+        $stmt = $this->conn->prepare($query);
+        $stmt->execute();
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+
+    // Atualiza situação
+    public function atualizarSituacao($novaSituacao) {
+        $query = "UPDATE {$this->table} SET situacao = :situacao WHERE id = :id";
+        $stmt = $this->conn->prepare($query);
+        $stmt->bindParam(':situacao', $novaSituacao);
+        $stmt->bindParam(':id', $this->id, PDO::PARAM_INT);
+        return $stmt->execute();
+    }
+
+    // Busca por ID
+    public function buscarPorId($id) {
+        $query = "SELECT * FROM {$this->table} WHERE id = :id";
+        $stmt = $this->conn->prepare($query);
+        $stmt->bindParam(':id', $id, PDO::PARAM_INT);
+        $stmt->execute();
+        return $stmt->fetch(PDO::FETCH_ASSOC);
+    }
+}
+?>
+
+--- location: c:\laragon\www\ciesytem\app\models\Estudante.php ---
+<?php
+require_once __DIR__ . '/../config/database.php';
+
+class Estudante {
+    private $conn;
+    private $table = 'estudantes';
+
+    public $id;
+    public $nome;
+    public $data_nascimento;
+    public $cpf;
+    public $documento_tipo;
+    public $documento_numero;
+    public $documento_orgao;
+    public $foto;
+    public $instituicao;
+    public $campus;
+    public $curso;
+    public $nivel;
+    public $matricula;
+    public $situacao_academica;
+    public $email;
+    public $telefone;
+    public $status_validacao; 
+
+    public function __construct($db) {
+        $this->conn = $db;
+    }
+
+    // Cria novo estudante
+    // Cria novo estudante
+public function criar() {
+    $query = "INSERT INTO {$this->table} (
+        nome, data_nascimento, cpf, documento_tipo, documento_numero, documento_orgao, foto,
+        instituicao, campus, curso, nivel, matricula, situacao_academica, status_validacao,
+        email, telefone
+    ) VALUES (
+        :nome, :data_nascimento, :cpf, :documento_tipo, :documento_numero, :documento_orgao, :foto,
+        :instituicao, :campus, :curso, :nivel, :matricula, :situacao_academica, :status_validacao,
+        :email, :telefone
+    )";
+
+    $stmt = $this->conn->prepare($query);
+
+    // Sanitização
+    $this->nome = htmlspecialchars(strip_tags(trim($this->nome)));
+    $this->cpf = preg_replace('/[^0-9]/', '', $this->cpf);
+    $this->documento_numero = htmlspecialchars(strip_tags(trim($this->documento_numero)));
+    $this->documento_orgao = htmlspecialchars(strip_tags(trim($this->documento_orgao)));
+    $this->instituicao = htmlspecialchars(strip_tags(trim($this->instituicao)));
+    $this->campus = htmlspecialchars(strip_tags(trim($this->campus)));
+    $this->curso = htmlspecialchars(strip_tags(trim($this->curso)));
+    $this->nivel = htmlspecialchars(strip_tags(trim($this->nivel)));
+    $this->matricula = htmlspecialchars(strip_tags(trim($this->matricula)));
+    $this->situacao_academica = htmlspecialchars(strip_tags(trim($this->situacao_academica)));
+    $this->status_validacao = htmlspecialchars(strip_tags(trim($this->status_validacao))); // ← ADICIONE ESTA LINHA
+    $this->email = filter_var(trim($this->email), FILTER_SANITIZE_EMAIL);
+    $this->telefone = preg_replace('/[^0-9() -+]/', '', $this->telefone);
+
+    $stmt->bindParam(':nome', $this->nome);
+    $stmt->bindParam(':data_nascimento', $this->data_nascimento);
+    $stmt->bindParam(':cpf', $this->cpf);
+    $stmt->bindParam(':documento_tipo', $this->documento_tipo);
+    $stmt->bindParam(':documento_numero', $this->documento_numero);
+    $stmt->bindParam(':documento_orgao', $this->documento_orgao);
+    $stmt->bindParam(':foto', $this->foto);
+    $stmt->bindParam(':instituicao', $this->instituicao);
+    $stmt->bindParam(':campus', $this->campus);
+    $stmt->bindParam(':curso', $this->curso);
+    $stmt->bindParam(':nivel', $this->nivel);
+    $stmt->bindParam(':matricula', $this->matricula);
+    $stmt->bindParam(':situacao_academica', $this->situacao_academica);
+    $stmt->bindParam(':status_validacao', $this->status_validacao); // ← ADICIONE ESTA LINHA
+    $stmt->bindParam(':email', $this->email);
+    $stmt->bindParam(':telefone', $this->telefone);
+
+    return $stmt->execute();
+}
+
+    // Listar todos
+    public function listar() {
+        $query = "SELECT * FROM {$this->table} ORDER BY nome";
+        $stmt = $this->conn->prepare($query);
+        $stmt->execute();
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+
+    // Buscar por ID
+    public function buscarPorId($id) {
+        $query = "SELECT * FROM {$this->table} WHERE id = :id";
+        $stmt = $this->conn->prepare($query);
+        $stmt->bindParam(':id', $id);
+        $stmt->execute();
+        return $stmt->fetch(PDO::FETCH_ASSOC);
+    }
+
+    // Atualizar
+    public function atualizar() {   
+        $query = "UPDATE {$this->table} SET
+            nome = :nome,
+            data_nascimento = :data_nascimento,
+            cpf = :cpf,
+            documento_tipo = :documento_tipo,
+            documento_numero = :documento_numero,
+            documento_orgao = :documento_orgao,
+            foto = :foto,
+            instituicao = :instituicao,
+            campus = :campus,
+            curso = :curso,
+            nivel = :nivel,
+            matricula = :matricula,
+            situacao_academica = :situacao_academica,
+            email = :email,
+            telefone = :telefone,
+            atualizado_em = NOW()
+        WHERE id = :id";
+
+        $stmt = $this->conn->prepare($query);
+
+        // Mesma sanitização do criar()
+        $this->nome = htmlspecialchars(strip_tags(trim($this->nome)));
+        $this->cpf = preg_replace('/[^0-9]/', '', $this->cpf);
+        $this->documento_numero = htmlspecialchars(strip_tags(trim($this->documento_numero)));
+        $this->documento_orgao = htmlspecialchars(strip_tags(trim($this->documento_orgao)));
+        $this->instituicao = htmlspecialchars(strip_tags(trim($this->instituicao)));
+        $this->campus = htmlspecialchars(strip_tags(trim($this->campus)));
+        $this->curso = htmlspecialchars(strip_tags(trim($this->curso)));
+        $this->nivel = htmlspecialchars(strip_tags(trim($this->nivel)));
+        $this->matricula = htmlspecialchars(strip_tags(trim($this->matricula)));
+        $this->situacao_academica = htmlspecialchars(strip_tags(trim($this->situacao_academica)));
+        $this->email = filter_var(trim($this->email), FILTER_SANITIZE_EMAIL);
+        $this->telefone = preg_replace('/[^0-9() -+]/', '', $this->telefone);
+
+        $stmt->bindParam(':nome', $this->nome);
+        $stmt->bindParam(':data_nascimento', $this->data_nascimento);
+        $stmt->bindParam(':cpf', $this->cpf);
+        $stmt->bindParam(':documento_tipo', $this->documento_tipo);
+        $stmt->bindParam(':documento_numero', $this->documento_numero);
+        $stmt->bindParam(':documento_orgao', $this->documento_orgao);
+        $stmt->bindParam(':foto', $this->foto);
+        $stmt->bindParam(':instituicao', $this->instituicao);
+        $stmt->bindParam(':campus', $this->campus);
+        $stmt->bindParam(':curso', $this->curso);
+        $stmt->bindParam(':nivel', $this->nivel);
+        $stmt->bindParam(':matricula', $this->matricula);
+        $stmt->bindParam(':situacao_academica', $this->situacao_academica);
+        $stmt->bindParam(':email', $this->email);
+        $stmt->bindParam(':telefone', $this->telefone);
+        $stmt->bindParam(':id', $this->id);
+        $stmt->bindParam(':status_validacao', $this->status_validacao); 
+
+        return $stmt->execute();
+    }
+
+    // Deletar
+    public function deletar() {
+        $query = "DELETE FROM {$this->table} WHERE id = :id";
+        $stmt = $this->conn->prepare($query);
+        $stmt->bindParam(':id', $this->id);
+        return $stmt->execute();
+    }
+}
+
+--- location: c:\laragon\www\ciesytem\app\models\DocumentoEstudante.php ---
+<?php
+require_once __DIR__ . '/../config/database.php';
+
+class DocumentoEstudante {
+    private $conn;
+    private $table = 'documentos_estudante';
+
+    public function __construct($db) {
+        $this->conn = $db;
+    }
+
+    public function salvar($estudante_id, $file, $tipo) {
+        if (!$file || $file['error'] !== UPLOAD_ERR_OK) return null;
+
+        $allowed = ['jpg', 'jpeg', 'png', 'pdf'];
+        $ext = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
+        if (!in_array($ext, $allowed)) return null;
+
+        $nome = "doc_identidade_{$tipo}_" . uniqid() . '.' . $ext;
+        $caminhoAbsoluto = __DIR__ . "/../../public/uploads/documentos_estudante/{$nome}";
+
+        if (!is_dir(dirname($caminhoAbsoluto))) {
+            mkdir(dirname($caminhoAbsoluto), 0777, true);
+        }
+
+        if (move_uploaded_file($file['tmp_name'], $caminhoAbsoluto)) {
+            $query = "INSERT INTO {$this->table} (estudante_id, tipo, caminho_arquivo, descricao) 
+                    VALUES (:estudante_id, :tipo, :caminho_arquivo, :descricao)";
+            $stmt = $this->conn->prepare($query);
+            
+            // Use bindValue() para valores literais
+            $stmt->bindValue(':estudante_id', $estudante_id, PDO::PARAM_INT);
+            $stmt->bindValue(':tipo', $tipo);
+            $stmt->bindValue(':caminho_arquivo', "uploads/documentos_estudante/{$nome}");
+            $stmt->bindValue(':descricao', $file['name']);
+            
+            return $stmt->execute();
+        }
+        return false;
+    }
+}
+
+--- location: c:\laragon\www\ciesytem\app\controllers\InscricaoController.php ---
+<?php
+require_once __DIR__ . '/../models/Inscricao.php';
+
+class InscricaoController {
+    private $inscricao;
+
+    public function __construct($db) {
+        $this->inscricao = new Inscricao($db);
+    }
+
+    // Reutiliza o mesmo método de upload (opcional, mas mantemos consistência)
+    public function uploadComprovante($file, $tipo = 'matricula') {
+        // Mesma lógica do CarteirinhaController, mas opcional
+        // Na verdade, o upload é feito no modelo agora, então este controller pode ficar vazio
+        // ou ser usado futuramente para validações específicas.
+    }
+}
+?>
+
+--- location: c:\laragon\www\ciesytem\app\controllers\EstudanteController.php ---
+<?php
+require_once __DIR__ . '/../models/Estudante.php';
+
+class EstudanteController {
+    private $estudante;
+
+    public function __construct($db) {
+        $this->estudante = new Estudante($db);
+    }
+
+    // Método para deletar foto antiga (antes de substituir)
+    public function deletarFotoAntiga($caminhoRelativo) {
+        if (empty($caminhoRelativo)) return;
+
+        $caminhoAbsoluto = __DIR__ . '/../../public/' . ltrim($caminhoRelativo, '/');
+        if (file_exists($caminhoAbsoluto)) {
+            unlink($caminhoAbsoluto);
+        }
+    }
+
+    public function uploadFoto($file) {
+        if (!$file || $file['error'] !== UPLOAD_ERR_OK) {
+            return null;
+        }
+
+        $allowed = ['jpg', 'jpeg', 'png'];
+        $ext = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
+        if (!in_array($ext, $allowed)) {
+            return null;
+        }
+
+        $nome = 'estudante_' . uniqid() . '.' . $ext;
+        $caminhoAbsoluto = __DIR__ . '/../../public/uploads/fotos/' . $nome;
+
+        if (!is_dir(dirname($caminhoAbsoluto))) {
+            mkdir(dirname($caminhoAbsoluto), 0777, true);
+        }
+
+        if (move_uploaded_file($file['tmp_name'], $caminhoAbsoluto)) {
+            return 'uploads/fotos/' . $nome;
+        }
+        return null;
+    }
+}
+
+--- location: c:\laragon\www\ciesytem\app\controllers\AuthController.php ---
+<?php
+// app/controllers/AuthController.php
+
+// 🔴 REMOVA ESSA LINHA:
+// session_start();
+
+require_once __DIR__ . '/../config/database.php';
+require_once __DIR__ . '/../models/usuario.php';
+
+class AuthController {
+    private $usuario;
+
+    public function __construct() {
+        $database = new Database();
+        $db = $database->getConnection();
+        $this->usuario = new Usuario($db);
+    }
+
+    public function login($email, $senha) {
+        $user = $this->usuario->login($email);
+        if ($user && password_verify($senha, $user['senha'])) {
+            $_SESSION['user_id'] = $user['id'];
+            $_SESSION['user_nome'] = $user['nome'];
+            $_SESSION['user_tipo'] = $user['tipo'];
+            return true;
+        }
+        return false;
+    }
+
+    public function logout() {
+        session_destroy();
+        header('Location: login.php');
+        exit;
+    }
+
+    public function isLoggedIn() {
+        return isset($_SESSION['user_id']);
+    }
+
+    public function isAdmin() {
+        return isset($_SESSION['user_tipo']) && $_SESSION['user_tipo'] === 'admin';
+    }
+}
+
+--- location: c:\laragon\www\ciesytem\public\index.php ---
+<?php
+session_start();
+// public/index.php
+header('Location: login.php');
+exit;
+?>
+
+--- location: c:\laragon\www\ciesytem\public\login.php ---
+<?php
+session_start();
+require_once __DIR__ . '/../app/controllers/AuthController.php';
+$auth = new AuthController();
+
+$erro = '';
+
+if ($_POST) {
+    if ($auth->login($_POST['email'], $_POST['senha'])) {
+        header('Location: dashboard.php');
+        exit;
+    } else {
+        $erro = "E-mail ou senha inválidos.";
+    }
+}
+?>
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Login</title>
+    <style>body{font-family:sans-serif;max-width:400px;margin:100px auto;padding:20px;}</style>
+</head>
+<body>
+    <h2>Login</h2>
+    <?php if ($erro): ?>
+        <p style="color:red;"><?= htmlspecialchars($erro) ?></p>
+    <?php endif; ?>
+    <form method="POST">
+        <p><input type="email" name="email" placeholder="E-mail" value="<?= htmlspecialchars($_POST['email'] ?? '') ?>" required></p>
+        <p><input type="password" name="senha" placeholder="Senha" required></p>
+        <p><button type="submit">Entrar</button></p>
+    </form>
+</body>
+</html>
+
+--- location: c:\laragon\www\ciesytem\public\logout.php ---
+<?php
+require_once '../app/controllers/AuthController.php';
+$auth = new AuthController();
+$auth->logout();
+?>
+
+--- location: c:\laragon\www\ciesytem\public\teste_sessao.php ---
+<?php
+if (isset($_SESSION['contador'])) {
+    $_SESSION['contador']++;
+} else {
+    $_SESSION['contador'] = 1;
+}
+echo "Sessão está funcionando! Contador: " . $_SESSION['contador'];
+?>
+
+--- location: c:\laragon\www\ciesytem\public\usuarios.php ---
+<?php
+session_start();
+require_once __DIR__ . '/../app/controllers/AuthController.php';
+require_once __DIR__ . '/../app/models/usuario.php';
+
+$auth = new AuthController();
+if (!$auth->isLoggedIn() || !$auth->isAdmin()) {
+    die("Acesso negado.");
+}
+
+$database = new Database();
+$db = $database->getConnection();
+$usuario = new Usuario($db);
+
+$erro = '';
+$sucesso = '';
+
+// ================================
+// TRATAMENTO DE FORMULÁRIO (CADASTRO/EDIÇÃO)
+// ================================
+
+if ($_POST) {
+    $usuario->nome = $_POST['nome'];
+    $usuario->email = $_POST['email'];
+    $usuario->tipo = $_POST['tipo'];
+    if (!empty($_POST['senha'])) {
+        $usuario->senha = $_POST['senha'];
+    }
+
+    if (isset($_POST['id'])) {
+        // Editar
+        $usuario->id = $_POST['id'];
+        if ($usuario->atualizar()) {
+            // === LOG: Usuário editado ===
+            require_once __DIR__ . '/../app/models/Log.php';
+            $log = new Log($db);
+            $log->registrar(
+                $_SESSION['user_id'],
+                'editou_usuario',
+                "ID: {$usuario->id}, Nome: {$usuario->nome}, Email: {$usuario->email}, Tipo: {$usuario->tipo}",
+                $usuario->id,
+                'usuarios'
+            );
+            header('Location: usuarios.php?sucesso=editado');
+            exit;
+        } else {
+            $erro = "Erro ao atualizar usuário.";
+        }
+    } else {
+        // Criar
+        if ($usuario->criar()) {
+            // === LOG: Usuário criado ===
+            require_once __DIR__ . '/../app/models/Log.php';
+            $log = new Log($db);
+            $novoId = $db->lastInsertId();
+            $log->registrar(
+                $_SESSION['user_id'],
+                'criou_usuario',
+                "Nome: {$usuario->nome}, Email: {$usuario->email}, Tipo: {$usuario->tipo}",
+                $novoId,
+                'usuarios'
+            );
+            header('Location: usuarios.php?sucesso=criado');
+            exit;
+        } else {
+            $erro = "Erro ao criar usuário. E-mail já existe.";
+        }
+    }
+}
+
+// ================================
+// EXCLUSÃO
+// ================================
+
+if (isset($_GET['deletar'])) {
+    $usuario->id = $_GET['deletar'];
+    
+    // Impedir autoexclusão
+    if ($usuario->id == $_SESSION['user_id']) {
+        $erro = "Você não pode excluir a si mesmo.";
+    } else {
+        if ($usuario->deletar()) {
+            // === LOG: Usuário excluído ===
+            require_once __DIR__ . '/../app/models/Log.php';
+            $log = new Log($db);
+            $log->registrar(
+                $_SESSION['user_id'],
+                'excluiu_usuario',
+                "ID: {$usuario->id}",
+                $usuario->id,
+                'usuarios'
+            );
+            header('Location: usuarios.php?sucesso=excluido');
+            exit;
+        } else {
+            $erro = "Erro ao excluir usuário.";
+        }
+    }
+}
+
+$usuarios = $usuario->listar();
+$editar = null;
+if (isset($_GET['editar'])) {
+    $editar = $usuario->buscarPorId($_GET['editar']);
+}
+
+?>
+
+--- location: c:\laragon\www\ciesytem\public\dashboard.php ---
+<?php
+session_start();
+require_once __DIR__ . '/../app/controllers/AuthController.php';
+$auth = new AuthController();
+
+if (!$auth->isLoggedIn()) {
+    header('Location: login.php');
+    exit;
+}
+?>
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Painel</title>
+    <style>body{font-family:sans-serif;margin:40px;}</style>
+</head>
+<body>
+    <h1>Bem-vindo, <?= htmlspecialchars($_SESSION['user_nome']) ?>!</h1>
+    <p>Tipo: <?= htmlspecialchars($_SESSION['user_tipo']) ?></p>
+    
+    <?php if ($_SESSION['user_tipo'] === 'admin'): ?>
+        <p><a href="usuarios.php">Gerenciar Usuários</a></p>
+        <p><a href="estudantes.php">Gerenciar Estudantes</a></p>
+        <p><a href="gerenciar_inscricoes.php">Gerenciar Inscrições</a></p>
+    <?php endif; ?>
+    
+    <p><a href="logout.php">Sair</a></p>
+</body>
+</html>
+
+--- location: c:\laragon\www\ciesytem\public\gerenciar_inscricoes.php ---
+<?php
+session_start();
+
+// Verificação de acesso
+require_once __DIR__ . '/../app/controllers/AuthController.php';
+$auth = new AuthController();
+if (!$auth->isLoggedIn() || !$auth->isAdmin()) {
+    die("Acesso negado.");
+}
+
+// Carrega dependências
+require_once __DIR__ . '/../app/models/Inscricao.php';
+
+$database = new Database();
+$db = $database->getConnection();
+$inscricao = new Inscricao($db);
+
+$erro = '';
+$sucesso = '';
+
+// ================================
+// AÇÕES: Upload de documentos
+// ================================
+
+if ($_POST) {
+    if (isset($_POST['acao']) && $_POST['acao'] === 'upload_matricula') {
+        $inscricaoId = (int)$_POST['inscricao_id'];
+        if (!empty($_FILES['comprovante_matricula']['name'])) {
+            $inscTemp = new Inscricao($db);
+            $inscTemp->id = $inscricaoId;
+            if ($inscTemp->salvarDocumentos($_FILES['comprovante_matricula'], 'matricula')) {
+                // Verifica se já tem pagamento → muda status para 'documentos_anexados'
+                $docs = $inscTemp->getDocumentos();
+                $temPagamento = false;
+                foreach ($docs as $doc) {
+                    if ($doc['tipo'] === 'pagamento') {
+                        $temPagamento = true;
+                        break;
+                    }
+                }
+                if ($temPagamento) {
+                    $inscTemp->atualizarSituacao('documentos_anexados');
+                }
+                $sucesso = "Comprovante de matrícula anexado.";
+            } else {
+                $erro = "Erro ao anexar comprovante de matrícula.";
+            }
+        } else {
+            $erro = "Selecione um arquivo.";
+        }
+    }
+
+    if (isset($_POST['acao']) && $_POST['acao'] === 'upload_pagamento') {
+        $inscricaoId = (int)$_POST['inscricao_id'];
+        if (!empty($_FILES['comprovante_pagamento']['name'])) {
+            $inscTemp = new Inscricao($db);
+            $inscTemp->id = $inscricaoId;
+            if ($inscTemp->salvarDocumentos($_FILES['comprovante_pagamento'], 'pagamento')) {
+                // Verifica se já tem matrícula → muda status para 'documentos_anexados'
+                $docs = $inscTemp->getDocumentos();
+                $temMatricula = false;
+                foreach ($docs as $doc) {
+                    if ($doc['tipo'] === 'matricula') {
+                        $temMatricula = true;
+                        break;
+                    }
+                }
+                if ($temMatricula) {
+                    $inscTemp->atualizarSituacao('documentos_anexados');
+                }
+                $sucesso = "Comprovante de pagamento anexado.";
+            } else {
+                $erro = "Erro ao anexar comprovante de pagamento.";
+            }
+        } else {
+            $erro = "Selecione um arquivo.";
+        }
+    }
+}
+
+// ================================
+// AÇÕES: Confirmar pagamento ou marcar CIE
+// ================================
+
+if ($_GET) {
+    if (isset($_GET['confirmar_pagamento'])) {
+        $inscricao->id = (int)$_GET['confirmar_pagamento'];
+        // Verifica se ambos os documentos existem
+        $inscTemp = new Inscricao($db);
+        $inscTemp->id = $inscricao->id;
+        $docs = $inscTemp->getDocumentos();
+        $temMatricula = false;
+        $temPagamento = false;
+        foreach ($docs as $doc) {
+            if ($doc['tipo'] === 'matricula') $temMatricula = true;
+            if ($doc['tipo'] === 'pagamento') $temPagamento = true;
+        }
+        if ($temMatricula && $temPagamento) {
+            if ($inscricao->atualizarSituacao('pago')) {
+                require_once __DIR__ . '/../app/models/Log.php';
+                $log = new Log($db);
+                $log->registrar(
+                    $_SESSION['user_id'],
+                    'confirmou_pagamento',
+                    "Inscrição ID: {$inscricao->id}",
+                    $inscricao->id,
+                    'inscricoes'
+                );
+                $sucesso = "Pagamento confirmado.";
+            } else {
+                $erro = "Erro ao confirmar pagamento.";
+            }
+        } else {
+            $erro = "É necessário anexar ambos os comprovantes (matrícula e pagamento) antes de confirmar.";
+        }
+    }
+
+    if (isset($_GET['cie_emitida'])) {
+        $inscricao->id = (int)$_GET['cie_emitida'];
+        if ($inscricao->atualizarSituacao('cie_emitida')) {
+            require_once __DIR__ . '/../app/models/Log.php';
+            $log = new Log($db);
+            $log->registrar(
+                $_SESSION['user_id'],
+                'marcou_cie_emitida',
+                "Inscrição ID: {$inscricao->id}",
+                $inscricao->id,
+                'inscricoes'
+            );
+            $sucesso = "CIE marcada como emitida.";
+        } else {
+            $erro = "Erro ao marcar CIE como emitida.";
+        }
+    }
+}
+
+// ================================
+// LISTAGEM DE INSCRIÇÕES
+// ================================
+$inscricoesList = $inscricao->listarComEstudantes();
+?>
+
+--- location: c:\laragon\www\ciesytem\public\gera_senha.php ---
+<?php
+echo password_hash('hants12', PASSWORD_DEFAULT);
+
+--- location: c:\laragon\www\ciesytem\public\estudantes.php ---
+(arquivo extenso — já incluído anteriormente no export; se precisar de uma cópia separada aqui, posso incluir)
+
+--- location: c:\laragon\www\ciesytem\public\carteirinhas.php ---
+(arquivo existe, mas está vazio)

@@ -3,6 +3,7 @@
 require_once __DIR__ . '/app/config/database.php';
 require_once __DIR__ . '/app/models/Estudante.php';
 require_once __DIR__ . '/app/models/Inscricao.php';
+require_once __DIR__ . '/app/controllers/EstudanteController.php'; // Adicionado para o upload da foto
 
 $database = new Database();
 $db = $database->getConnection();
@@ -58,8 +59,36 @@ if ($_POST) {
             $estudante->telefone = $_POST['telefone'] ?? '';
             $estudante->status_validacao = 'pendente'; // ← diferente do cadastro manual
 
+            // Processar foto se enviada
+            $fotoAtualizada = false;
+            if (isset($_FILES['foto']) && $_FILES['foto']['error'] === UPLOAD_ERR_OK) {
+                 $estudanteController = new EstudanteController($db);
+                 $caminhoFoto = $estudanteController->uploadFoto($_FILES['foto']);
+                 if ($caminhoFoto) {
+                     $estudante->foto = $caminhoFoto;
+                     $fotoAtualizada = true;
+                 } else {
+                     // Pode-se definir um erro ou simplesmente ignorar se for opcional
+                     // $erro = "Erro ao fazer upload da foto.";
+                     $estudante->foto = null; // Garante que não seja vazia se falhar
+                 }
+            } else {
+                 $estudante->foto = null; // Define como nulo se não for enviada
+            }
+
+
             if ($estudante->criar()) {
                 $estudanteId = $db->lastInsertId();
+
+                // *** ATUALIZAR A FOTO NO REGISTRO RECÉM-CRIADO SE FOR NECESSÁRIO ***
+                // Isso é necessário porque o campo 'foto' não era inicializado no cadastro público antes.
+                if ($fotoAtualizada) {
+                    $updateStmt = $db->prepare("UPDATE estudantes SET foto = :foto WHERE id = :id");
+                    $updateStmt->bindParam(':foto', $estudante->foto);
+                    $updateStmt->bindParam(':id', $estudanteId);
+                    $updateStmt->execute();
+                }
+
 
                 // Cria inscrição
                 $inscricao = new Inscricao($db);
@@ -108,7 +137,7 @@ if ($_POST) {
         .form-row { display: flex; flex-wrap: wrap; gap: 15px; margin-bottom: 15px; }
         .form-group { flex: 1; min-width: 200px; }
         label { display: block; margin-bottom: 4px; font-weight: bold; font-size: 0.9em; }
-        input, select { width: 10; padding: 8px; border: 1px solid #ccc; border-radius: 4px; }
+        input, select { width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; }
         button { background: #1976d2; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; width: 100%; margin-top: 10px; }
         button:hover { background: #1565c0; }
         a { color: #1976d2; text-decoration: none; display: inline-block; margin-top: 20px; }
@@ -201,12 +230,19 @@ if ($_POST) {
                     </select>
                 </div>
 
+                <!-- Foto -->
+                <h3>Foto </h3>
+                <div class="form-group">
+                    <label>Anexe sua foto (JPG, PNG)</label>
+                    <input type="file" name="foto" accept=".jpg,.jpeg,.png" required>
+                </div>
+
                 <!-- Contato -->
-                <h3>Contato (Opcional)</h3>
+                <h3>Contato</h3>
                 <div class="form-row">
                     <div class="form-group">
                         <label>E-mail</label>
-                        <input type="email" name="email" value="<?= htmlspecialchars($_POST['email'] ?? '') ?>">
+                        <input type="email" name="email" value="<?= htmlspecialchars($_POST['email'] ?? '') ?>" required>
                     </div>
                     <div class="form-group">
                         <label>Telefone</label>

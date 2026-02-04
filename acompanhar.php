@@ -100,7 +100,7 @@ if ($_POST) {
                         break;
                     case 'dados_aprovados':
                     case 'pagamento_pendente':
-                        echo '<p style="color:#f57c00;">Seus dados foram aprovados! Aguarde instruções para pagamento ou entre em contato com a administração.</p>';
+                        echo '<p style="color:#f57c00;">Seus dados foram Registrados Aguarde aprovação dos dados de matricula e instruções para pagamento.</p>';
                         break;
                     case 'documentos_anexados':
                         echo '<p style="color:#5d4037;">Documentos recebidos. Aguardando confirmação de pagamento.</p>';
