@@ -10,6 +10,7 @@ if (!$auth->isLoggedIn() || !$auth->isAdmin()) {
 
 // Carrega dependências
 require_once __DIR__ . '/../app/models/Estudante.php';
+require_once __DIR__ . '/../app/models/Inscricao.php'; // Adicionado modelo Inscricao
 require_once __DIR__ . '/../app/controllers/EstudanteController.php';
 require_once __DIR__ . '/../app/models/DocumentoEstudante.php'; // Novo modelo
 
@@ -17,6 +18,7 @@ $database = new Database();
 $db = $database->getConnection();
 $estudanteCtrl = new EstudanteController($db);
 $estudante = new Estudante($db);
+$inscricaoModel = new Inscricao($db); // Instância do modelo de inscrição
 $docIdentidadeModel = new DocumentoEstudante($db); // Instância do modelo de doc
 
 $erro = '';
@@ -134,7 +136,7 @@ if ($_POST) {
         }
     }
     // ================================
-    // CADASTRO (SEM CRIAÇÃO MANUAL DE INSCRIÇÃO)
+    // CADASTRO (COM CRIAÇÃO MANUAL DE INSCRIÇÃO)
     // ================================
     else {
         if (empty($erro)) { // Apenas prosseguir se as validações acima estiverem OK
@@ -142,21 +144,33 @@ if ($_POST) {
             if ($estudante->criar()) {
                 $novoEstudanteId = $db->lastInsertId();
 
-                // === SALVAR DOCUMENTOS DE IDENTIDADE (Opcional, mas obrigatório se o tipo for selecionado) ===
-                if ($tipoDocIdentidade && $docFrente && $docVerso) {
-                    if (!$docIdentidadeModel->salvarFrenteVerso($novoEstudanteId, $docFrente, $docVerso, $tipoDocIdentidade)) {
-                        $erro = "Erro ao salvar os documentos de identidade (Frente e Verso).";
-                        // Opcional: deletar o estudante recém-criado se o upload falhar?
-                        // $estudante->id = $novoEstudanteId; $estudante->deletar();
+                // === CRIAR INSCRIÇÃO AUTOMATICAMENTE ===
+                $inscricao = new Inscricao($db); // Nova instância para a inscrição
+                $inscricao->estudante_id = $novoEstudanteId;
+                $inscricao->origem = 'administrador'; // Define a origem como administrador
+                if ($inscricao->criar()) { // Cria a inscrição
+                    // === SALVAR DOCUMENTOS DE IDENTIDADE (Opcional, mas obrigatório se o tipo for selecionado) ===
+                    if ($tipoDocIdentidade && $docFrente && $docVerso) {
+                        if (!$docIdentidadeModel->salvarFrenteVerso($novoEstudanteId, $docFrente, $docVerso, $tipoDocIdentidade)) {
+                            $erro = "Erro ao salvar os documentos de identidade (Frente e Verso).";
+                            // Opcional: deletar o estudante e a inscrição recém-criados se o upload falhar?
+                            // $estudante->id = $novoEstudanteId; $estudante->deletar();
+                            // $inscricao->id = $inscricao->id; $inscricao->deletar(); // Precisaria do ID da inscrição criada
+                        } else {
+                            $sucesso = "Estudante cadastrado com sucesso!";
+                            foreach ($_POST as $key => $value) $_POST[$key] = '';
+                        }
                     } else {
-                        $sucesso = "Estudante cadastrado com sucesso!";
-                        foreach ($_POST as $key => $value) $_POST[$key] = '';
+                         // Se não for enviado tipo e arquivos, é aceitável para cadastro.
+                         $sucesso = "Estudante cadastrado com sucesso!";
+                         foreach ($_POST as $key => $value) $_POST[$key] = '';
                     }
                 } else {
-                     // Se não for enviado tipo e arquivos, é aceitável para cadastro.
-                     $sucesso = "Estudante cadastrado com sucesso!";
-                     foreach ($_POST as $key => $value) $_POST[$key] = '';
+                    $erro = "Erro ao criar inscrição para o estudante.";
+                    // Opcional: deletar o estudante recém-criado se a inscrição falhar?
+                    // $estudante->id = $novoEstudanteId; $estudante->deletar();
                 }
+                // === FIM CRIAR INSCRIÇÃO AUTOMATICAMENTE ===
 
             } else {
                 $erro = "Erro ao cadastrar estudante. Verifique se a matrícula ou CPF já existem.";

@@ -103,6 +103,7 @@ if ($_POST) {
                     // Cria inscrição
                     $inscricao = new Inscricao($db);
                     $inscricao->estudante_id = $estudanteId;
+                    $inscricao->origem = 'estudante';
                     $inscricao->criar(); // cria com status 'aguardando_validacao'
 
                     // Obter ID da inscrição

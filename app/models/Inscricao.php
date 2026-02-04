@@ -10,6 +10,11 @@ class Inscricao {
     public $codigo_inscricao;
     public $data_validade;
     public $situacao;
+    // *** NOVOS CAMPOS ***
+    public $pagamento_confirmado;
+    public $matricula_validada;
+    public $origem; 
+
 
     public function __construct($db) {
         $this->conn = $db;
@@ -30,20 +35,34 @@ class Inscricao {
     public function criar() {
         $this->codigo_inscricao = $this->gerarCodigoUnico();
         $this->data_validade = (date('Y') + 1) . '-03-31';
-        $this->situacao = 'pagamento_pendente'; // ← ajustado para novo fluxo
-        
+        $this->situacao = 'aguardando_validacao';
+        // *** INICIALIZAR NOVOS CAMPOS ***
+        $this->pagamento_confirmado = 0; // FALSE
+        $this->matricula_validada = 0; // FALSE
+        // A origem deve ser definida ANTES de chamar criar()
+        if (empty($this->origem) || !in_array($this->origem, ['estudante', 'administrador'])) {
+             // Pode lançar um erro ou definir um padrão, mas é melhor garantir que seja definido antes
+             // throw new Exception("Campo 'origem' deve ser definido antes de criar a inscrição.");
+             $this->origem = 'estudante'; // Padrão, mas ideal definir explicitamente
+        }
+        // *** FIM INICIALIZAR NOVOS CAMPOS ***
         $query = "INSERT INTO {$this->table} (
-            estudante_id, codigo_inscricao, data_validade, situacao
+            estudante_id, codigo_inscricao, data_validade, situacao,
+            pagamento_confirmado, matricula_validada, origem -- Incluir novo campo
         ) VALUES (
-            :estudante_id, :codigo_inscricao, :data_validade, :situacao
+            :estudante_id, :codigo_inscricao, :data_validade, :situacao,
+            :pagamento_confirmado, :matricula_validada, :origem -- Incluir novo campo
         )";
-
         $stmt = $this->conn->prepare($query);
         $stmt->bindParam(':estudante_id', $this->estudante_id, PDO::PARAM_INT);
         $stmt->bindParam(':codigo_inscricao', $this->codigo_inscricao);
         $stmt->bindParam(':data_validade', $this->data_validade);
         $stmt->bindParam(':situacao', $this->situacao);
-
+        // *** BIND DOS NOVOS CAMPOS ***
+        $stmt->bindParam(':pagamento_confirmado', $this->pagamento_confirmado, PDO::PARAM_BOOL);
+        $stmt->bindParam(':matricula_validada', $this->matricula_validada, PDO::PARAM_BOOL);
+        $stmt->bindParam(':origem', $this->origem);
+        // *** FIM BIND DOS NOVOS CAMPOS ***
         return $stmt->execute();
     }
 
@@ -67,7 +86,8 @@ class Inscricao {
         if (empty($documentos['name'][0])) return true;
 
         $allowed = ['jpg', 'jpeg', 'png', 'pdf'];
-        $query = "INSERT INTO documentos_inscricao (inscricao_id, tipo, caminho_arquivo, descricao) 
+
+        $query = "INSERT INTO documentos_inscricao (inscricao_id, tipo, caminho_arquivo, descricao)
                   VALUES (:inscricao_id, :tipo, :caminho_arquivo, :descricao)";
         $stmt = $this->conn->prepare($query);
 
@@ -88,6 +108,7 @@ class Inscricao {
 
             if (move_uploaded_file($documentos['tmp_name'][$index], $caminhoAbsoluto)) {
                 $caminhoRelativo = "uploads/comprovantes/{$subdir}/{$nomeUnico}";
+
                 // Usa bindValue para evitar referência entre execuções
                 $stmt->bindValue(':inscricao_id', $this->id, PDO::PARAM_INT);
                 $stmt->bindValue(':tipo', $tipo);
@@ -104,11 +125,9 @@ class Inscricao {
         if (empty($this->id)) {
             return [];
         }
-
         $query = "SELECT * FROM documentos_inscricao WHERE inscricao_id = :inscricao_id ORDER BY tipo, criado_em";
         $stmt = $this->conn->prepare($query);
         $stmt->bindParam(':inscricao_id', $this->id, PDO::PARAM_INT);
-        
         try {
             $stmt->execute();
             $result = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -121,21 +140,66 @@ class Inscricao {
     // Lista inscrições com dados do estudante
     public function listarComEstudantes() {
         $query = "
-            SELECT 
-                i.*, 
-                e.nome AS estudante_nome, 
-                e.matricula AS estudante_matricula,
-                e.curso AS estudante_curso
-            FROM inscricoes i
-            INNER JOIN estudantes e ON i.estudante_id = e.id
-            ORDER BY i.id DESC
+        SELECT
+            i.*,
+            e.nome AS estudante_nome,
+            e.matricula AS estudante_matricula,
+            e.curso AS estudante_curso
+        FROM inscricoes i
+        INNER JOIN estudantes e ON i.estudante_id = e.id
+        ORDER BY i.id DESC
         ";
         $stmt = $this->conn->prepare($query);
         $stmt->execute();
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
 
-    // Atualiza situação
+    // *** NOVO MÉTODO: Lista inscrições com dados do estudante, com filtros e paginação ***
+    public function listarComEstudantesFiltrada($filtroSituacao = '', $filtroStatusValidacao = '', $offset = 0, $limit = 10) {
+        $query = "
+        SELECT
+            i.*,
+            e.nome AS estudante_nome,
+            e.matricula AS estudante_matricula,
+            e.curso AS estudante_curso,
+            e.status_validacao AS estudante_status_validacao -- Inclui o status de validação
+        FROM inscricoes i
+        INNER JOIN estudantes e ON i.estudante_id = e.id
+        ";
+
+        $params = [];
+        $whereConditions = [];
+
+        if ($filtroSituacao) {
+            $whereConditions[] = "i.situacao = :filtro_situacao";
+            $params[':filtro_situacao'] = $filtroSituacao;
+        }
+        if ($filtroStatusValidacao) {
+            $whereConditions[] = "e.status_validacao = :filtro_status_validacao";
+            $params[':filtro_status_validacao'] = $filtroStatusValidacao;
+        }
+
+        if (!empty($whereConditions)) {
+            $query .= " WHERE " . implode(' AND ', $whereConditions);
+        }
+
+        $query .= " ORDER BY i.id DESC LIMIT :limit OFFSET :offset";
+
+        $stmt = $this->conn->prepare($query);
+        $stmt->bindParam(':limit', $limit, PDO::PARAM_INT);
+        $stmt->bindParam(':offset', $offset, PDO::PARAM_INT);
+
+        foreach ($params as $key => $value) {
+            $stmt->bindValue($key, $value);
+        }
+
+        $stmt->execute();
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+    // *** FIM NOVO MÉTODO ***
+
+
+    // Atualiza situação (mantido por compatibilidade, mas a lógica será revisada)
     public function atualizarSituacao($novaSituacao) {
         $query = "UPDATE {$this->table} SET situacao = :situacao WHERE id = :id";
         $stmt = $this->conn->prepare($query);
@@ -143,6 +207,25 @@ class Inscricao {
         $stmt->bindParam(':id', $this->id, PDO::PARAM_INT);
         return $stmt->execute();
     }
+
+    // *** NOVOS MÉTODOS PARA ATUALIZAR STATUS BOOLEANOS ***
+    public function atualizarPagamentoConfirmado($valor = true) {
+        $query = "UPDATE {$this->table} SET pagamento_confirmado = :valor WHERE id = :id";
+        $stmt = $this->conn->prepare($query);
+        $stmt->bindValue(':valor', $valor, PDO::PARAM_BOOL);
+        $stmt->bindParam(':id', $this->id, PDO::PARAM_INT);
+        return $stmt->execute();
+    }
+
+    public function atualizarMatriculaValidada($valor = true) {
+        $query = "UPDATE {$this->table} SET matricula_validada = :valor WHERE id = :id";
+        $stmt = $this->conn->prepare($query);
+        $stmt->bindValue(':valor', $valor, PDO::PARAM_BOOL);
+        $stmt->bindParam(':id', $this->id, PDO::PARAM_INT);
+        return $stmt->execute();
+    }
+    // *** FIM NOVOS MÉTODOS ***
+
 
     // Busca por ID
     public function buscarPorId($id) {
