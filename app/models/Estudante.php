@@ -110,6 +110,7 @@ public function criar() {
             nivel = :nivel,
             matricula = :matricula,
             situacao_academica = :situacao_academica,
+            status_validacao = :status_validacao,
             email = :email,
             telefone = :telefone,
             atualizado_em = NOW()
@@ -146,8 +147,8 @@ public function criar() {
         $stmt->bindParam(':situacao_academica', $this->situacao_academica);
         $stmt->bindParam(':email', $this->email);
         $stmt->bindParam(':telefone', $this->telefone);
+        $stmt->bindParam(':status_validacao', $this->status_validacao);
         $stmt->bindParam(':id', $this->id);
-        $stmt->bindParam(':status_validacao', $this->status_validacao); 
 
         return $stmt->execute();
     }
