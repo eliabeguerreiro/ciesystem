@@ -62,6 +62,7 @@ if ($_POST) {
 
     // Validação para cadastro e edição
     if (!isset($_POST['id'])) { // Cadastro novo
+        // --- VALIDAÇÃO PARA CADASTRO NOVO (mantém obrigatoriedade) ---
         if ($tipoDocIdentidade && (!$docFrente || empty($docFrente['name']) || !$docVerso || empty($docVerso['name']))) {
              $erro = "Para o cadastro com documento de identidade, é necessário anexar ambos os arquivos: Frente e Verso.";
         }
@@ -73,6 +74,7 @@ if ($_POST) {
             }
         }
     } else { // Edição
+         // --- VALIDAÇÃO PARA EDIÇÃO (permite envio opcional) ---
          if ($tipoDocIdentidade && (!empty($docFrente['name']) || !empty($docVerso['name']))) {
              // Se um novo tipo for selecionado e arquivos forem enviados, valida
              $tiposValidos = ['rg', 'cnh', 'passaporte', 'cpf'];
@@ -82,6 +84,7 @@ if ($_POST) {
                   $erro = "Ao enviar documentos de identidade, ambos os arquivos (Frente e Verso) devem ser anexados.";
              }
          }
+         // Se não forem enviados novos arquivos, a validação não é acionada, permitindo a edição sem alterar os documentos.
     }
 
 
@@ -158,11 +161,33 @@ if ($_POST) {
                             // $inscricao->id = $inscricao->id; $inscricao->deletar(); // Precisaria do ID da inscrição criada
                         } else {
                             $sucesso = "Estudante cadastrado com sucesso!";
+                            // === LOG: Estudante criado (via admin) ===
+                            require_once __DIR__ . '/../app/models/Log.php';
+                            $log = new Log($db);
+                            $log->registrar(
+                                $_SESSION['user_id'], // ID do usuário admin que está fazendo o cadastro
+                                'criou_estudante_manualmente',
+                                "Estudante: {$estudante->nome}, Matrícula: {$estudante->matricula}",
+                                $novoEstudanteId, // ID do estudante recém-criado
+                                'estudantes'
+                            );
+                            // === FIM LOG ===
                             foreach ($_POST as $key => $value) $_POST[$key] = '';
                         }
                     } else {
                          // Se não for enviado tipo e arquivos, é aceitável para cadastro.
                          $sucesso = "Estudante cadastrado com sucesso!";
+                         // === LOG: Estudante criado (via admin) - sem docs ===
+                         require_once __DIR__ . '/../app/models/Log.php';
+                         $log = new Log($db);
+                         $log->registrar(
+                             $_SESSION['user_id'], // ID do usuário admin
+                             'criou_estudante_admin',
+                             "Estudante: {$estudante->nome}, Matrícula: {$estudante->matricula} (Sem documentos de identidade)",
+                             $novoEstudanteId, // ID do estudante recém-criado
+                             'estudantes'
+                         );
+                         // === FIM LOG ===
                          foreach ($_POST as $key => $value) $_POST[$key] = '';
                     }
                 } else {
@@ -171,7 +196,6 @@ if ($_POST) {
                     // $estudante->id = $novoEstudanteId; $estudante->deletar();
                 }
                 // === FIM CRIAR INSCRIÇÃO AUTOMATICAMENTE ===
-
             } else {
                 $erro = "Erro ao cadastrar estudante. Verifique se a matrícula ou CPF já existem.";
             }
@@ -340,6 +364,7 @@ $estudantes = $estudante->listar();
             <div class="form-row">
                 <div class="form-group">
                     <label>Documento de Identidade - Frente</label>
+                    <!-- Removido 'required' para edição -->
                     <input type="file" name="doc_identidade_frente" accept=".jpg,.jpeg,.png,.pdf">
                     <?php if ($editar):
                         $tipoEdit = $editar['documento_tipo']; // Ou pegar do POST se for erro
@@ -357,6 +382,7 @@ $estudantes = $estudante->listar();
                 </div>
                 <div class="form-group">
                     <label>Documento de Identidade - Verso</label>
+                    <!-- Removido 'required' para edição -->
                     <input type="file" name="doc_identidade_verso" accept=".jpg,.jpeg,.png,.pdf">
                     <?php if ($editar):
                         $tipoEdit = $editar['documento_tipo']; // Ou pegar do POST se for erro

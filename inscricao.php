@@ -103,7 +103,7 @@ if ($_POST) {
                     // Cria inscrição
                     $inscricao = new Inscricao($db);
                     $inscricao->estudante_id = $estudanteId;
-                    $inscricao->origem = 'estudante';
+                    $inscricao->origem = 'estudante'; // Definir a origem como estudante
                     $inscricao->criar(); // cria com status 'aguardando_validacao'
 
                     // Obter ID da inscrição
@@ -134,6 +134,17 @@ if ($_POST) {
                                 if (!empty($_FILES['selfie_documento']['name'])) {
                                     if ($docIdentidadeModel->salvarUnicoArquivo($estudanteId, $_FILES['selfie_documento'], 'selfie_documento')) {
                                         $sucesso = "Inscrição realizada com sucesso!";
+
+                                        // === LOG: Inscrição realizada por estudante ===
+                                        require_once __DIR__ . '/app/models/Log.php'; // Inclua o modelo Log
+                                        $log = new Log($db);
+                                        $log->registrar(
+                                            null, // ID do usuário (nulo para ação pública)
+                                            'inscricao_publica_realizada',
+                                            "Estudante: {$estudante->nome}, CPF: {$estudante->cpf}, Código Inscrição: {$codigoGerado}",
+                                            $inscricaoId, // ID da inscrição criada
+                                            'inscricoes'
+                                        );
                                     } else {
                                         $erro = "Erro ao salvar a selfie com o documento.";
                                         // Opcional: lidar com falha na selfie (ex: rollback da inscrição?)
@@ -159,7 +170,6 @@ if ($_POST) {
     }
 }
 ?>
-
 <!DOCTYPE html>
 <html>
 <head>
@@ -237,8 +247,8 @@ if ($_POST) {
 
                 <div class="form-row">
                     <div class="form-group">
-                        <label>Foto 3x4 (JPG, PNG)</label>
-                        <input type="file" name="foto" accept=".jpg,.jpeg,.png" required>
+                        <label>Foto 3x4 (JPG, PNG) (Opcional)</label>
+                        <input type="file" name="foto" accept=".jpg,.jpeg,.png">
                     </div>
                 </div>
 
@@ -274,13 +284,13 @@ if ($_POST) {
                         <label>Campus</label>
                         <input type="text" name="campus" value="<?= htmlspecialchars($_POST['campus'] ?? '') ?>">
                     </div>
-                </div>
-
-                <div class="form-row">
                     <div class="form-group">
                         <label>Curso *</label>
                         <input type="text" name="curso" value="<?= htmlspecialchars($_POST['curso'] ?? '') ?>" required>
                     </div>
+                </div>
+
+                <div class="form-row">
                     <div class="form-group">
                         <label>Nível *</label>
                         <input type="text" name="nivel" value="<?= htmlspecialchars($_POST['nivel'] ?? '') ?>" placeholder="Ex: Técnico, Superior" required>
@@ -301,11 +311,11 @@ if ($_POST) {
                 </div>
 
                 <!-- Contato -->
-                <h3>Contato</h3>
+                <h3>Contato (Opcional)</h3>
                 <div class="form-row">
                     <div class="form-group">
-                        <label>E-mail *</label>
-                        <input type="email" name="email" value="<?= htmlspecialchars($_POST['email'] ?? '') ?>" required>
+                        <label>E-mail</label>
+                        <input type="email" name="email" value="<?= htmlspecialchars($_POST['email'] ?? '') ?>">
                     </div>
                     <div class="form-group">
                         <label>Telefone</label>

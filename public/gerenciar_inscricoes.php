@@ -3,14 +3,15 @@ session_start();
 
 // Verificação de acesso
 require_once __DIR__ . '/../app/controllers/AuthController.php';
+require_once __DIR__ . '/../app/models/Inscricao.php';
+require_once __DIR__ . '/../app/models/Log.php'; // Adicionado para logs
+
 $auth = new AuthController();
 if (!$auth->isLoggedIn() || !$auth->isAdmin()) {
     die("Acesso negado.");
 }
 
 // Carrega dependências
-require_once __DIR__ . '/../app/models/Inscricao.php';
-
 $database = new Database();
 $db = $database->getConnection();
 $inscricao = new Inscricao($db);
@@ -43,11 +44,42 @@ if ($_POST) {
 
                     if ($dadosEstudante && $dadosEstudante['status_validacao'] === 'dados_aprovados') {
                         $inscTemp->atualizarMatriculaValidada(true); // Valida automaticamente
+                        
+                        // === LOG: Matrícula anexada e validada automaticamente ===
+                        $log = new Log($db);
+                        $log->registrar(
+                            $_SESSION['user_id'],
+                            'anexou_e_validou_comprovante_matricula',
+                            "Inscrição ID: {$inscricaoId}, Estudante ID: {$estudanteId}",
+                            $inscricaoId,
+                            'inscricoes'
+                        );
+                        
                         $sucesso = "Comprovante de matrícula anexado e validado automaticamente.";
                     } else {
+                        // === LOG: Matrícula anexada (aguardando validação) ===
+                        $log = new Log($db);
+                        $log->registrar(
+                            $_SESSION['user_id'],
+                            'anexou_comprovante_matricula',
+                            "Inscrição ID: {$inscricaoId}, Estudante ID: {$estudanteId}",
+                            $inscricaoId,
+                            'inscricoes'
+                        );
+                        
                         $sucesso = "Comprovante de matrícula anexado. Validação pendente.";
                     }
                 } else {
+                    // === LOG: Matrícula anexada (falha na busca do estudante) ===
+                    $log = new Log($db);
+                    $log->registrar(
+                        $_SESSION['user_id'],
+                        'anexou_comprovante_matricula',
+                        "Inscrição ID: {$inscricaoId} (Erro: dados do estudante não encontrados)",
+                        $inscricaoId,
+                        'inscricoes'
+                    );
+                    
                     $sucesso = "Comprovante de matrícula anexado.";
                 }
             } else {
@@ -66,6 +98,17 @@ if ($_POST) {
             if ($inscTemp->salvarDocumentos($_FILES['comprovante_pagamento'], 'pagamento')) {
                 // ✅ Ao anexar o comprovante de pagamento, marcamos como confirmado automaticamente.
                 $inscTemp->atualizarPagamentoConfirmado(true);
+                
+                // === LOG: Pagamento anexado e confirmado automaticamente ===
+                $log = new Log($db);
+                $log->registrar(
+                    $_SESSION['user_id'],
+                    'anexou_e_confirmou_comprovante_pagamento',
+                    "Inscrição ID: {$inscricaoId}",
+                    $inscricaoId,
+                    'inscricoes'
+                );
+                
                 $sucesso = "Comprovante de pagamento anexado e confirmado.";
             } else {
                 $erro = "Erro ao anexar comprovante de pagamento.";
