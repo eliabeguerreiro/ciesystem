@@ -28,27 +28,31 @@ if ($_POST) {
         if (!empty($_FILES['comprovante_matricula']['name'])) {
             $inscTemp = new Inscricao($db);
             $inscTemp->id = $inscricaoId;
+            if ($inscTemp->salvarDocumentos($_FILES['comprovante_matricula'], 'matricula')) {
+                // Após anexar a matrícula, verificamos se o estudante tem status_validacao = 'dados_aprovados'
+                // Se sim, validamos automaticamente a matrícula.
+                $inscTemp->id = $inscricaoId;
+                $inscDados = $inscTemp->buscarPorId($inscricaoId);
+                if ($inscDados) {
+                    $estudanteId = $inscDados['estudante_id'];
+                    $queryEstudante = "SELECT status_validacao FROM estudantes WHERE id = :estudante_id";
+                    $stmtEstudante = $db->prepare($queryEstudante);
+                    $stmtEstudante->bindParam(':estudante_id', $estudanteId, PDO::PARAM_INT);
+                    $stmtEstudante->execute();
+                    $dadosEstudante = $stmtEstudante->fetch(PDO::FETCH_ASSOC);
 
-            // Buscar dados da inscrição para verificar a origem
-            $inscricaoDados = $inscTemp->buscarPorId($inscricaoId);
-            if ($inscricaoDados) {
-                 $origemInscricao = $inscricaoDados['origem'];
-
-                 if ($inscTemp->salvarDocumentos($_FILES['comprovante_matricula'], 'matricula')) {
-                     // SE a inscrição foi feita pelo ESTUDANTE, validar automaticamente a matrícula
-                     if ($origemInscricao === 'estudante') {
-                         $inscTemp->atualizarMatriculaValidada(true); // Chama o novo método para validar
-                         $sucesso = "Comprovante de matrícula anexado e validado automaticamente (origem: estudante).";
-                     } else {
-                         $sucesso = "Comprovante de matrícula anexado. Validação manual necessária (origem: administrador).";
-                     }
-                 } else {
-                     $erro = "Erro ao anexar comprovante de matrícula.";
-                 }
+                    if ($dadosEstudante && $dadosEstudante['status_validacao'] === 'dados_aprovados') {
+                        $inscTemp->atualizarMatriculaValidada(true); // Valida automaticamente
+                        $sucesso = "Comprovante de matrícula anexado e validado automaticamente.";
+                    } else {
+                        $sucesso = "Comprovante de matrícula anexado. Validação pendente.";
+                    }
+                } else {
+                    $sucesso = "Comprovante de matrícula anexado.";
+                }
             } else {
-                 $erro = "Erro: Inscrição não encontrada.";
+                $erro = "Erro ao anexar comprovante de matrícula.";
             }
-
         } else {
             $erro = "Selecione um arquivo.";
         }
@@ -60,8 +64,9 @@ if ($_POST) {
             $inscTemp = new Inscricao($db);
             $inscTemp->id = $inscricaoId;
             if ($inscTemp->salvarDocumentos($_FILES['comprovante_pagamento'], 'pagamento')) {
-                // Não altera mais o status aqui, apenas o flag de pagamento_confirmado
-                $sucesso = "Comprovante de pagamento anexado.";
+                // ✅ Ao anexar o comprovante de pagamento, marcamos como confirmado automaticamente.
+                $inscTemp->atualizarPagamentoConfirmado(true);
+                $sucesso = "Comprovante de pagamento anexado e confirmado.";
             } else {
                 $erro = "Erro ao anexar comprovante de pagamento.";
             }
@@ -72,82 +77,16 @@ if ($_POST) {
 }
 
 // ================================
-// AÇÕES: Confirmar pagamento ou marcar CIE
+// AÇÕES: Marcar CIE
 // ================================
 
 if ($_GET) {
-    if (isset($_GET['confirmar_pagamento'])) {
-        $inscricao->id = (int)$_GET['confirmar_pagamento'];
-        // Verifica se já tem pagamento anexado
-        $inscTemp = new Inscricao($db);
-        $inscTemp->id = $inscricao->id;
-        $docs = $inscTemp->getDocumentos();
-        $temPagamento = false;
-        foreach ($docs as $doc) {
-            if ($doc['tipo'] === 'pagamento') {
-                $temPagamento = true;
-                break;
-            }
-        }
-        if ($temPagamento) {
-            if ($inscricao->atualizarPagamentoConfirmado(true)) { // Atualiza o flag
-                require_once __DIR__ . '/../app/models/Log.php';
-                $log = new Log($db);
-                $log->registrar(
-                    $_SESSION['user_id'],
-                    'confirmou_pagamento',
-                    "Inscrição ID: {$inscricao->id}",
-                    $inscricao->id,
-                    'inscricoes'
-                );
-                $sucesso = "Pagamento confirmado.";
-            } else {
-                $erro = "Erro ao confirmar pagamento.";
-            }
-        } else {
-            $erro = "Não é possível confirmar o pagamento. O comprovante de pagamento não foi anexado.";
-        }
-    }
-
-    if (isset($_GET['validar_matricula'])) {
-        $inscricao->id = (int)$_GET['validar_matricula'];
-        // Verifica se já tem matrícula anexada
-        $inscTemp = new Inscricao($db);
-        $inscTemp->id = $inscricao->id;
-        $docs = $inscTemp->getDocumentos();
-        $temMatricula = false;
-        foreach ($docs as $doc) {
-            if ($doc['tipo'] === 'matricula') {
-                $temMatricula = true;
-                break;
-            }
-        }
-        if ($temMatricula) {
-            if ($inscricao->atualizarMatriculaValidada(true)) { // Atualiza o flag
-                require_once __DIR__ . '/../app/models/Log.php';
-                $log = new Log($db);
-                $log->registrar(
-                    $_SESSION['user_id'],
-                    'validou_matricula',
-                    "Inscrição ID: {$inscricao->id}",
-                    $inscricao->id,
-                    'inscricoes'
-                );
-                $sucesso = "Matrícula validada.";
-            } else {
-                $erro = "Erro ao validar matrícula.";
-            }
-        } else {
-            $erro = "Não é possível validar a matrícula. O comprovante de matrícula não foi anexado.";
-        }
-    }
-
     if (isset($_GET['cie_emitida'])) {
         $inscricao->id = (int)$_GET['cie_emitida'];
-        // Verifica se pagamento está confirmado e matrícula está validada
+        // Verifica se pagamento está confirmado E matrícula está validada
         $inscTemp = $inscricao->buscarPorId($inscricao->id);
         if ($inscTemp && $inscTemp['pagamento_confirmado'] == 1 && $inscTemp['matricula_validada'] == 1) {
-             if ($inscricao->atualizarSituacao('cie_emitida')) { // Atualiza o status antigo para cie_emitida
+            if ($inscricao->atualizarSituacao('cie_emitida')) {
                 require_once __DIR__ . '/../app/models/Log.php';
                 $log = new Log($db);
                 $log->registrar(
@@ -162,7 +101,7 @@ if ($_GET) {
                 $erro = "Erro ao marcar CIE como emitida.";
             }
         } else {
-             $erro = "Erro: Para emitir a CIE, o pagamento deve estar confirmado e a matrícula validada.";
+            $erro = "Erro: Para emitir a CIE, o pagamento deve estar confirmado e a matrícula validada.";
         }
     }
 }
@@ -173,7 +112,7 @@ if ($_GET) {
 $filtroSituacao = $_GET['filtro_situacao'] ?? '';
 $filtroStatusValidacao = $_GET['filtro_status_validacao'] ?? '';
 $pagina = (int)($_GET['pagina'] ?? 1);
-$registrosPorPagina = 10; // Ajuste conforme necessário
+$registrosPorPagina = 10;
 $offset = ($pagina - 1) * $registrosPorPagina;
 
 // Contar total de registros para paginação
@@ -295,7 +234,6 @@ $possiveisStatusValidacao = ['pendente', 'dados_aprovados'];
             <p>Nenhuma inscrição encontrada com os critérios atuais.</p>
         <?php else: ?>
             <table>
-                <!-- Dentro do corpo da tabela -->
                 <thead>
                     <tr>
                         <th>Código Inscrição</th>
@@ -307,14 +245,11 @@ $possiveisStatusValidacao = ['pendente', 'dados_aprovados'];
                         <th>Status Validação</th>
                         <th>Matrícula Anexada</th>
                         <th>Pagamento Anexado</th>
-                        <th>Pagamento Confirmado</th>
                         <th>Matrícula Validada</th>
+                        <th>Pagamento Confirmado</th>
                         <th>Documentos</th>
-                        <!-- Novas colunas de ação -->
                         <th>Anexar Matrícula</th>
                         <th>Anexar Pagamento</th>
-                        <th>Confirmar Pagamento</th>
-                        <th>Validar Matrícula</th>
                         <th>CIE Emitida</th>
                     </tr>
                 </thead>
@@ -327,18 +262,18 @@ $possiveisStatusValidacao = ['pendente', 'dados_aprovados'];
                         <td><?= htmlspecialchars($insc['estudante_curso']) ?></td>
                         <td><?= date('d/m/Y', strtotime($insc['criado_em'])) ?></td>
                         <td>
-                            <?php
+                            <?php 
                             $statusClass = 'status-' . $insc['situacao'];
                             echo '<span class="' . $statusClass . '">' . ucfirst(str_replace('_', ' ', $insc['situacao'])) . '</span>';
                             ?>
                         </td>
                         <td>
-                            <?php
+                            <?php 
                             $statusValidacao = $insc['estudante_status_validacao'] ?? 'Desconhecido';
                             echo '<span>' . ucfirst(str_replace('_', ' ', $statusValidacao)) . '</span>';
                             ?>
                         </td>
-                        <!-- Colunas booleanas (já existentes) -->
+                        <!-- Colunas booleanas -->
                         <td>
                             <?php
                             $inscTemp = new Inscricao($db);
@@ -364,14 +299,14 @@ $possiveisStatusValidacao = ['pendente', 'dados_aprovados'];
                         </td>
                         <td>
                             <?php
-                            $statusClass = 'status-boolean ' . ($insc['pagamento_confirmado'] ? 'status-true' : 'status-false');
-                            echo '<span class="' . $statusClass . '">' . ($insc['pagamento_confirmado'] ? 'Sim' : 'Não') . '</span>';
+                            $statusClass = 'status-boolean ' . ($insc['matricula_validada'] ? 'status-true' : 'status-false');
+                            echo '<span class="' . $statusClass . '">' . ($insc['matricula_validada'] ? 'Sim' : 'Não') . '</span>';
                             ?>
                         </td>
                         <td>
                             <?php
-                            $statusClass = 'status-boolean ' . ($insc['matricula_validada'] ? 'status-true' : 'status-false');
-                            echo '<span class="' . $statusClass . '">' . ($insc['matricula_validada'] ? 'Sim' : 'Não') . '</span>';
+                            $statusClass = 'status-boolean ' . ($insc['pagamento_confirmado'] ? 'status-true' : 'status-false');
+                            echo '<span class="' . $statusClass . '">' . ($insc['pagamento_confirmado'] ? 'Sim' : 'Não') . '</span>';
                             ?>
                         </td>
                         <td>
@@ -381,10 +316,17 @@ $possiveisStatusValidacao = ['pendente', 'dados_aprovados'];
                             } else {
                                 foreach ($docs as $doc) {
                                     switch ($doc['tipo'] ?? '') {
-                                        case 'matricula': $nomeAmigavel = 'Comprovante de Matrícula'; break;
-                                        case 'pagamento': $nomeAmigavel = 'Comprovante de Pagamento'; break;
-                                        case 'selfie': $nomeAmigavel = 'Selfie com Documento'; break;
-                                        default: $nomeAmigavel = 'Documento (' . htmlspecialchars($doc['tipo']) . ')'; 
+                                        case 'matricula':
+                                            $nomeAmigavel = 'Comprovante de Matrícula';
+                                            break;
+                                        case 'pagamento':
+                                            $nomeAmigavel = 'Comprovante de Pagamento';
+                                            break;
+                                        case 'selfie':
+                                            $nomeAmigavel = 'Selfie com Documento';
+                                            break;
+                                        default:
+                                            $nomeAmigavel = 'Documento (' . htmlspecialchars($doc['tipo']) . ')';
                                     }
                                     echo '<div><a href="' . htmlspecialchars($doc['caminho_arquivo']) . '" target="_blank" class="doc-link">'
                                         . $nomeAmigavel . '</a></div>';
@@ -392,11 +334,9 @@ $possiveisStatusValidacao = ['pendente', 'dados_aprovados'];
                             }
                             ?>
                         </td>
-
-                        <!-- COLUNA: Anexar Matrícula -->
                         <td class="acoes">
                             <?php if (in_array($insc['situacao'], ['pagamento_pendente', 'dados_aprovados']) && !$temMatricula): ?>
-                                <form method="POST" enctype="multipart/form-data" style="display:inline;">
+                                <form method="POST" enctype="multipart/form-data" class="upload-form" style="display:inline;">
                                     <input type="hidden" name="acao" value="upload_matricula">
                                     <input type="hidden" name="inscricao_id" value="<?= $insc['id'] ?>">
                                     <input type="file" name="comprovante_matricula" accept=".jpg,.jpeg,.png,.pdf" style="display:none;" onchange="this.form.submit()" id="mat_<?= $insc['id'] ?>">
@@ -408,11 +348,9 @@ $possiveisStatusValidacao = ['pendente', 'dados_aprovados'];
                                 —
                             <?php endif; ?>
                         </td>
-
-                        <!-- COLUNA: Anexar Pagamento -->
                         <td class="acoes">
                             <?php if (in_array($insc['situacao'], ['pagamento_pendente', 'dados_aprovados']) && !$temPagamento): ?>
-                                <form method="POST" enctype="multipart/form-data" style="display:inline;">
+                                <form method="POST" enctype="multipart/form-data" class="upload-form" style="display:inline;">
                                     <input type="hidden" name="acao" value="upload_pagamento">
                                     <input type="hidden" name="inscricao_id" value="<?= $insc['id'] ?>">
                                     <input type="file" name="comprovante_pagamento" accept=".jpg,.jpeg,.png,.pdf" style="display:none;" onchange="this.form.submit()" id="pag_<?= $insc['id'] ?>">
@@ -424,34 +362,6 @@ $possiveisStatusValidacao = ['pendente', 'dados_aprovados'];
                                 —
                             <?php endif; ?>
                         </td>
-
-                        <!-- COLUNA: Confirmar Pagamento -->
-                        <td class="acoes">
-                            <?php if ($temPagamento && !$insc['pagamento_confirmado']): ?>
-                                <a href="?confirmar_pagamento=<?= $insc['id'] ?>&pagina=<?= $pagina ?>&filtro_situacao=<?= urlencode($filtroSituacao) ?>&filtro_status_validacao=<?= urlencode($filtroStatusValidacao) ?>" onclick="return confirm('Confirmar pagamento?')" title="Confirmar pagamento">
-                                    ✅
-                                </a>
-                            <?php elseif ($insc['pagamento_confirmado']): ?>
-                                <span title="Já confirmado">✔️</span>
-                            <?php else: ?>
-                                —
-                            <?php endif; ?>
-                        </td>
-
-                        <!-- COLUNA: Validar Matrícula -->
-                        <td class="acoes">
-                            <?php if ($temMatricula && !$insc['matricula_validada']): ?>
-                                <a href="?validar_matricula=<?= $insc['id'] ?>&pagina=<?= $pagina ?>&filtro_situacao=<?= urlencode($filtroSituacao) ?>&filtro_status_validacao=<?= urlencode($filtroStatusValidacao) ?>" onclick="return confirm('Validar matrícula?')" title="Validar matrícula">
-                                    📋
-                                </a>
-                            <?php elseif ($insc['matricula_validada']): ?>
-                                <span title="Já validada">✔️</span>
-                            <?php else: ?>
-                                —
-                            <?php endif; ?>
-                        </td>
-
-                        <!-- COLUNA: CIE Emitida -->
                         <td class="acoes">
                             <?php if ($insc['situacao'] !== 'cie_emitida' && $insc['estudante_status_validacao'] === 'dados_aprovados' && $insc['pagamento_confirmado'] && $insc['matricula_validada']): ?>
                                 <a href="?cie_emitida=<?= $insc['id'] ?>&pagina=<?= $pagina ?>&filtro_situacao=<?= urlencode($filtroSituacao) ?>&filtro_status_validacao=<?= urlencode($filtroStatusValidacao) ?>" onclick="return confirm('Marcar CIE como emitida?')" title="Emitir CIE">
@@ -472,7 +382,7 @@ $possiveisStatusValidacao = ['pendente', 'dados_aprovados'];
             <div class="pagination">
                 <?php if ($totalPaginas > 1): ?>
                     <?php if ($pagina > 1): ?>
-                        <a href="?pagina=<?= $pagina - 1 ?>&filtro_situacao=<?= urlencode($filtroSituacao) ?>&filtro_status_validacao=<?= urlencode($filtroStatusValidacao) ?>">&laquo; Anterior</a>
+                        <a href="?pagina=<?= $pagina - 1 ?>&filtro_situacao=<?= urlencode($filtroSituacao) ?>&filtro_status_validacao=<?= urlencode($filtroStatusValidacao) ?>">← Anterior</a>
                     <?php endif; ?>
 
                     <?php for ($i = 1; $i <= $totalPaginas; $i++): ?>
@@ -484,7 +394,7 @@ $possiveisStatusValidacao = ['pendente', 'dados_aprovados'];
                     <?php endfor; ?>
 
                     <?php if ($pagina < $totalPaginas): ?>
-                        <a href="?pagina=<?= $pagina + 1 ?>&filtro_situacao=<?= urlencode($filtroSituacao) ?>&filtro_status_validacao=<?= urlencode($filtroStatusValidacao) ?>">Próxima &raquo;</a>
+                        <a href="?pagina=<?= $pagina + 1 ?>&filtro_situacao=<?= urlencode($filtroSituacao) ?>&filtro_status_validacao=<?= urlencode($filtroStatusValidacao) ?>">Próxima →</a>
                     <?php endif; ?>
                 <?php endif; ?>
             </div>
