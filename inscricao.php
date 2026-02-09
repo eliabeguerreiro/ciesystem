@@ -5,6 +5,7 @@ require_once __DIR__ . '/app/models/Estudante.php';
 require_once __DIR__ . '/app/models/Inscricao.php';
 require_once __DIR__ . '/app/controllers/EstudanteController.php';
 require_once __DIR__ . '/app/models/DocumentoEstudante.php'; // Novo modelo
+require_once __DIR__ . '/app/models/Instituicao.php'; // Adicione esta linha
 
 $database = new Database();
 $db = $database->getConnection();
@@ -12,6 +13,7 @@ $db = $database->getConnection();
 $estudanteModel = new Estudante($db);
 $inscricaoModel = new Inscricao($db);
 $docIdentidadeModel = new DocumentoEstudante($db); // Instância do modelo de doc
+$instituicaoModel = new Instituicao($db); // Instância do modelo de instituição
 $estudanteController = new EstudanteController($db); // Instância do controller
 
 $erro = '';
@@ -24,7 +26,7 @@ $codigoGerado = '';
 if ($_POST) {
     // Valida campos obrigatórios
     $camposObrigatorios = ['nome', 'data_nascimento', 'cpf', 'documento_tipo', 'documento_numero',
-                          'instituicao', 'curso', 'nivel', 'matricula'];
+                          'instituicao_id', 'curso', 'nivel', 'matricula']; // <- Mudança: instituicao_id
     foreach ($camposObrigatorios as $campo) {
         if (empty($_POST[$campo])) {
             $erro = "O campo '$campo' é obrigatório.";
@@ -85,7 +87,9 @@ if ($_POST) {
                 $estudante->documento_tipo = $_POST['documento_tipo'];
                 $estudante->documento_numero = $_POST['documento_numero'];
                 $estudante->documento_orgao = $_POST['documento_orgao'] ?? '';
-                $estudante->instituicao = $_POST['instituicao'];
+                // --- MUDANÇA AQUI ---
+                $estudante->instituicao_id = (int)($_POST['instituicao_id'] ?? 0); // Sanitiza como inteiro
+                // --- FIM MUDANÇA ---
                 $estudante->campus = $_POST['campus'] ?? '';
                 $estudante->curso = $_POST['curso'];
                 $estudante->nivel = $_POST['nivel'];
@@ -278,7 +282,17 @@ if ($_POST) {
                 <div class="form-row">
                     <div class="form-group">
                         <label>Instituição *</label>
-                        <input type="text" name="instituicao" value="<?= htmlspecialchars($_POST['instituicao'] ?? '') ?>" required>
+                        <!-- Substituído o campo de texto por um dropdown -->
+                        <select name="instituicao_id" required>
+                            <option value="">Selecione sua instituição...</option>
+                            <?php
+                            $instituicoesAtivas = $instituicaoModel->listarAtivas();
+                            foreach ($instituicoesAtivas as $inst): ?>
+                                <option value="<?= $inst['id'] ?>" <?= ($_POST['instituicao_id'] ?? '') == $inst['id'] ? 'selected' : '' ?>>
+                                    <?= htmlspecialchars($inst['nome']) ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
                     </div>
                     <div class="form-group">
                         <label>Campus</label>

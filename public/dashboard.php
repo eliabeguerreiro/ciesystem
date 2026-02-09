@@ -23,6 +23,7 @@ if (!$auth->isLoggedIn()) {
         <p><a href="usuarios.php">Gerenciar Usuários</a></p>
         <p><a href="estudantes.php">Gerenciar Estudantes</a></p>
         <p><a href="gerenciar_inscricoes.php">Gerenciar Inscrições</a></p>
+        <p><a href="instituicoes.php">Gerenciar Instituições</a></p>
     <?php endif; ?>
     
     <p><a href="logout.php">Sair</a></p>

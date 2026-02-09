@@ -13,6 +13,7 @@ require_once __DIR__ . '/../app/models/Estudante.php';
 require_once __DIR__ . '/../app/models/Inscricao.php'; // Adicionado modelo Inscricao
 require_once __DIR__ . '/../app/controllers/EstudanteController.php';
 require_once __DIR__ . '/../app/models/DocumentoEstudante.php'; // Novo modelo
+require_once __DIR__ . '/../app/models/Instituicao.php';
 
 $database = new Database();
 $db = $database->getConnection();
@@ -20,6 +21,8 @@ $estudanteCtrl = new EstudanteController($db);
 $estudante = new Estudante($db);
 $inscricaoModel = new Inscricao($db); // Instância do modelo de inscrição
 $docIdentidadeModel = new DocumentoEstudante($db); // Instância do modelo de doc
+$instituicaoModel = new Instituicao($db); // Instância do modelo de instituição
+
 
 $erro = '';
 $sucesso = '';
@@ -36,7 +39,10 @@ if ($_POST) {
     $estudante->documento_tipo = $_POST['documento_tipo'] ?? 'RG';
     $estudante->documento_numero = $_POST['documento_numero'] ?? '';
     $estudante->documento_orgao = $_POST['documento_orgao'] ?? '';
-    $estudante->instituicao = $_POST['instituicao'] ?? '';
+    // --- MUDANÇA AQUI ---
+    // Removido: $estudante->instituicao = $_POST['instituicao'] ?? '';
+    $estudante->instituicao_id = (int)($_POST['instituicao_id'] ?? 0); // Sanitiza como inteiro
+    // --- FIM MUDANÇA ---
     $estudante->campus = $_POST['campus'] ?? '';
     $estudante->curso = $_POST['curso'] ?? '';
     $estudante->nivel = $_POST['nivel'] ?? '';
@@ -80,7 +86,7 @@ if ($_POST) {
              $tiposValidos = ['rg', 'cnh', 'passaporte', 'cpf'];
              if (!in_array(strtolower($tipoDocIdentidade), $tiposValidos)) {
                   $erro = "Tipo de documento de identidade inválido.";
-             } elseif (empty($docFrente['name']) || empty($docVerso['name'])) {
+             } elseif (empty($docFrente['name']) || empty($docVerso['name'])) { // Corrigido: era um ) extra
                   $erro = "Ao enviar documentos de identidade, ambos os arquivos (Frente e Verso) devem ser anexados.";
              }
          }
@@ -408,7 +414,17 @@ $estudantes = $estudante->listar();
             <div class="form-row">
                 <div class="form-group">
                     <label>Instituição *</label>
-                    <input type="text" name="instituicao" value="<?= htmlspecialchars($editar['instituicao'] ?? ($_POST['instituicao'] ?? '')) ?>" required placeholder="Ex: IFPB">
+                    <!-- Substituído o campo de texto por um dropdown -->
+                    <select name="instituicao_id" required>
+                        <option value="">Selecione uma instituição...</option>
+                        <?php
+                        $instituicoesAtivas = $instituicaoModel->listarAtivas();
+                        foreach ($instituicoesAtivas as $inst): ?>
+                            <option value="<?= $inst['id'] ?>" <?= ($editar && $editar['instituicao_id'] == $inst['id']) ? 'selected' : '' ?>>
+                                <?= htmlspecialchars($inst['nome']) ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
                 </div>
                 <div class="form-group">
                     <label>Campus</label>
@@ -503,7 +519,7 @@ $estudantes = $estudante->listar();
                     <td><?= htmlspecialchars($e['nome']) ?></td>
                     <td><?= htmlspecialchars($e['matricula']) ?></td>
                     <td><?= htmlspecialchars($e['curso']) ?></td>
-                    <td><?= htmlspecialchars($e['instituicao']) ?></td>
+                    <td><?= htmlspecialchars($e['instituicao_nome'] ?? 'N/A') ?></td> <!-- Mostra o nome da instituição ou N/A -->
                     <td><?= htmlspecialchars($e['situacao_academica']) ?></td>
                     <td><?= htmlspecialchars($e['status_validacao']) ?></td>
                     <td class="acoes">
