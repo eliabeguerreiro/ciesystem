@@ -235,5 +235,35 @@ class Inscricao {
         $stmt->execute();
         return $stmt->fetch(PDO::FETCH_ASSOC);
     }
+    
+public function marcarComoAguardandoEntrega() {
+    $novaSituacao = 'cie_emitida_aguardando_entrega';
+    $query = "UPDATE {$this->table} SET situacao = :situacao WHERE id = :id";
+    $stmt = $this->conn->prepare($query);
+    $stmt->bindParam(':situacao', $novaSituacao);
+    $stmt->bindParam(':id', $this->id, PDO::PARAM_INT);
+    return $stmt->execute();
 }
+
+// método para listar inscrições prontas para logística
+public function listarProntasParaLogistica() {
+    $query = "
+    SELECT
+        i.*,
+        e.nome AS estudante_nome,
+        e.matricula AS estudante_matricula,
+        e.curso AS estudante_curso,
+        inst.nome AS instituicao_nome -- Inclui o nome da instituição
+    FROM inscricoes i
+    INNER JOIN estudantes e ON i.estudante_id = e.id
+    INNER JOIN instituicoes inst ON e.instituicao_id = inst.id -- JOIN com instituicoes
+    WHERE i.situacao = 'cie_emitida_aguardando_entrega'
+    ORDER BY i.id DESC
+    ";
+    $stmt = $this->conn->prepare($query);
+    $stmt->execute();
+    return $stmt->fetchAll(PDO::FETCH_ASSOC);
+}
+
+}   
 ?>

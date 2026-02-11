@@ -10,7 +10,7 @@ if (!$auth->isLoggedIn()) {
 ?>
 <!DOCTYPE html>
 <html>
-<head>
+<head> 
     <meta charset="UTF-8">
     <title>Painel</title>
     <style>body{font-family:sans-serif;margin:40px;}</style>
@@ -24,6 +24,7 @@ if (!$auth->isLoggedIn()) {
         <p><a href="estudantes.php">Gerenciar Estudantes</a></p>
         <p><a href="gerenciar_inscricoes.php">Gerenciar Inscrições</a></p>
         <p><a href="instituicoes.php">Gerenciar Instituições</a></p>
+        <p><a href="logistica_entregas.php">Logística de Entregas</a></p>
     <?php endif; ?>
     
     <p><a href="logout.php">Sair</a></p>
