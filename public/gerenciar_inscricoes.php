@@ -129,22 +129,22 @@ if ($_GET) {
         // Verifica se pagamento está confirmado E matrícula está validada
         $inscTemp = $inscricao->buscarPorId($inscricao->id);
         if ($inscTemp && $inscTemp['pagamento_confirmado'] == 1 && $inscTemp['matricula_validada'] == 1) {
-            if ($inscricao->atualizarSituacao('cie_emitida')) {
+            if ($inscricao->atualizarSituacao('cie_emitida_aguardando_entrega')) { // <- MUDANÇA: Novo status
                 require_once __DIR__ . '/../app/models/Log.php';
                 $log = new Log($db);
                 $log->registrar(
                     $_SESSION['user_id'],
-                    'marcou_cie_emitida',
+                    'cie_pronta_para_entrega', // <- MUDANÇA: Nova ação de log
                     "Inscrição ID: {$inscricao->id}",
                     $inscricao->id,
                     'inscricoes'
                 );
-                $sucesso = "CIE marcada como emitida.";
+                $sucesso = "CIE marcada como pronta para entrega.";
             } else {
-                $erro = "Erro ao marcar CIE como emitida.";
+                $erro = "Erro ao marcar CIE como pronta para entrega.";
             }
         } else {
-            $erro = "Erro: Para emitir a CIE, o pagamento deve estar confirmado e a matrícula validada.";
+            $erro = "Erro: Para prosseguir para logística, o pagamento deve estar confirmado e a matrícula validada.";
         }
     }
 }
@@ -182,7 +182,9 @@ $totalPaginas = ceil($totalRegistros / $registrosPorPagina);
 $inscricoesList = $inscricao->listarComEstudantesFiltrada($filtroSituacao, $filtroStatusValidacao, $offset, $registrosPorPagina);
 
 // Obter todos os status possíveis para o filtro (opcional, para o frontend)
-$possiveisSituacoes = ['aguardando_validacao', 'dados_aprovados', 'pagamento_pendente', 'documentos_anexados', 'pago', 'cie_emitida'];
+// --- MUDANÇA AQUI ---
+$possiveisSituacoes = ['aguardando_validacao', 'dados_aprovados', 'pagamento_pendente', 'documentos_anexados', 'pago', 'cie_emitida_aguardando_entrega', 'cie_entregue_na_instituicao'];
+// --- FIM MUDANÇA ---
 $possiveisStatusValidacao = ['pendente', 'dados_aprovados'];
 ?>
 
@@ -209,6 +211,10 @@ $possiveisStatusValidacao = ['pendente', 'dados_aprovados'];
         .status-documentos_anexados { color: #5d4037; font-weight: bold; }
         .status-pago { color: #2e7d32; font-weight: bold; }
         .status-cie_emitida { color: #1565c0; }
+        /* --- NOVOS ESTILOS ADICIONADOS --- */
+        .status-cie_emitida_aguardando_entrega { color: #5d4037; font-weight: bold; } /* Marrom */
+        .status-cie_entregue_na_instituicao { color: #2e7d32; font-weight: bold; } /* Verde */
+        /* --- FIM NOVOS ESTILOS --- */
         a { color: #1976d2; text-decoration: none; margin-right: 10px; }
         a:hover { text-decoration: underline; }
         .voltar { display: inline-block; margin-bottom: 20px; color: #555; }
@@ -378,7 +384,7 @@ $possiveisStatusValidacao = ['pendente', 'dados_aprovados'];
                             ?>
                         </td>
                         <td class="acoes">
-                            <?php if (in_array($insc['situacao'], ['pagamento_pendente', 'dados_aprovados']) && !$temMatricula): ?>
+                            <?php if (in_array($insc['situacao'], ['aguardando_validacao', 'pagamento_pendente', 'dados_aprovados']) && !$temMatricula): ?>
                                 <form method="POST" enctype="multipart/form-data" class="upload-form" style="display:inline;">
                                     <input type="hidden" name="acao" value="upload_matricula">
                                     <input type="hidden" name="inscricao_id" value="<?= $insc['id'] ?>">
@@ -392,7 +398,7 @@ $possiveisStatusValidacao = ['pendente', 'dados_aprovados'];
                             <?php endif; ?>
                         </td>
                         <td class="acoes">
-                            <?php if (in_array($insc['situacao'], ['pagamento_pendente', 'dados_aprovados']) && !$temPagamento): ?>
+                            <?php if (in_array($insc['situacao'], ['aguardando_validacao', 'pagamento_pendente', 'dados_aprovados']) && !$temPagamento): ?>
                                 <form method="POST" enctype="multipart/form-data" class="upload-form" style="display:inline;">
                                     <input type="hidden" name="acao" value="upload_pagamento">
                                     <input type="hidden" name="inscricao_id" value="<?= $insc['id'] ?>">
@@ -406,15 +412,23 @@ $possiveisStatusValidacao = ['pendente', 'dados_aprovados'];
                             <?php endif; ?>
                         </td>
                         <td class="acoes">
-                            <?php if ($insc['situacao'] !== 'cie_emitida' && $insc['estudante_status_validacao'] === 'dados_aprovados' && $insc['pagamento_confirmado'] && $insc['matricula_validada']): ?>
-                                <a href="?cie_emitida=<?= $insc['id'] ?>&pagina=<?= $pagina ?>&filtro_situacao=<?= urlencode($filtroSituacao) ?>&filtro_status_validacao=<?= urlencode($filtroStatusValidacao) ?>" onclick="return confirm('Marcar CIE como emitida?')" title="Emitir CIE">
-                                    🎫
+                            <!-- --- MUDANÇA AQUI --- -->
+                            <?php if ($insc['situacao'] === 'cie_emitida_aguardando_entrega'): ?>
+                                <!-- Link para página de logística -->
+                                <a href="logistica_entregas.php?inscricao_id=<?= $insc['id'] ?>" title="Gerenciar logística de entrega">
+                                    🚚
                                 </a>
-                            <?php elseif ($insc['situacao'] === 'cie_emitida'): ?>
-                                <span title="CIE emitida">🎫</span>
+                                <span title="Pronta para entrega">📦 Aguardando Entrega</span>
+                            <?php elseif ($insc['situacao'] === 'cie_entregue_na_instituicao'): ?>
+                                <span title="CIE entregue na instituição">✅ Entregue</span>
+                            <?php elseif ($insc['estudante_status_validacao'] === 'dados_aprovados' && $insc['pagamento_confirmado'] && $insc['matricula_validada']): ?>
+                                <a href="?cie_emitida=<?= $insc['id'] ?>&pagina=<?= $pagina ?>&filtro_situacao=<?= urlencode($filtroSituacao) ?>&filtro_status_validacao=<?= urlencode($filtroStatusValidacao) ?>" onclick="return confirm('Marcar CIE como pronta para entrega?')" title="Registrar saída para logística">
+                                    📦
+                                </a>
                             <?php else: ?>
                                 —
                             <?php endif; ?>
+                            <!-- --- FIM MUDANÇA --- -->
                         </td>
                     </tr>
                     <?php endforeach; ?>
