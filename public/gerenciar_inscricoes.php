@@ -120,7 +120,7 @@ if ($_POST) {
 }
 
 // ================================
-// AÇÕES: Marcar CIE
+// AÇÕES: Marcar CIE e Validar Matrícula Manualmente
 // ================================
 
 if ($_GET) {
@@ -147,6 +147,58 @@ if ($_GET) {
             $erro = "Erro: Para prosseguir para logística, o pagamento deve estar confirmado e a matrícula validada.";
         }
     }
+
+    // --- NOVA AÇÃO ---
+    if (isset($_GET['validar_matricula_manualmente'])) {
+        $inscricaoId = (int)$_GET['validar_matricula_manualmente'];
+        $pagina = (int)($_GET['pagina'] ?? 1);
+        $filtroSituacao = $_GET['filtro_situacao'] ?? '';
+        $filtroStatusValidacao = $_GET['filtro_status_validacao'] ?? '';
+
+        $inscTemp = new Inscricao($db);
+        $inscTemp->id = $inscricaoId;
+        $dadosInscricao = $inscTemp->buscarPorId($inscricaoId);
+
+        if ($dadosInscricao) {
+            $estudanteId = $dadosInscricao['estudante_id'];
+
+            // Verificar se o comprovante de matrícula foi anexado
+            $docs = $inscTemp->getDocumentos();
+            $temMatricula = false;
+            foreach ($docs as $doc) {
+                if ($doc['tipo'] === 'matricula') {
+                    $temMatricula = true;
+                    break;
+                }
+            }
+
+            if ($temMatricula && !$dadosInscricao['matricula_validada']) { // Só prosseguir se anexado e ainda não validado
+                if ($inscTemp->atualizarMatriculaValidada(true)) {
+                    require_once __DIR__ . '/../app/models/Log.php';
+                    $log = new Log($db);
+                    $log->registrar(
+                        $_SESSION['user_id'],
+                        'admin_validou_matricula_manualmente', // Nova ação de log
+                        "Inscrição ID: {$inscricaoId}, Estudante ID: {$estudanteId}",
+                        $inscricaoId,
+                        'inscricoes'
+                    );
+                    $sucesso = "Matrícula validada manualmente com sucesso.";
+                } else {
+                    $erro = "Erro ao validar matrícula manualmente.";
+                }
+            } else {
+                $erro = "Erro: Comprovante de matrícula não encontrado ou já validado.";
+            }
+        } else {
+            $erro = "Erro: Inscrição não encontrada.";
+        }
+
+        // Redirecionar para manter os filtros e a página atual
+        header("Location: ?pagina={$pagina}&filtro_situacao=" . urlencode($filtroSituacao) . "&filtro_status_validacao=" . urlencode($filtroStatusValidacao));
+        exit; // Importante sair após o redirect
+    }
+    // --- FIM NOVA AÇÃO ---
 }
 
 // ================================
@@ -297,7 +349,7 @@ $possiveisStatusValidacao = ['pendente', 'dados_aprovados'];
                         <th>Matrícula Validada</th>
                         <th>Pagamento Confirmado</th>
                         <th>Documentos</th>
-                        <th>Anexar Matrícula</th>
+                        <th>Anexar Matrícula</th> <!-- Coluna atualizada -->
                         <th>Anexar Pagamento</th>
                         <th>CIE Emitida</th>
                     </tr>
@@ -391,8 +443,15 @@ $possiveisStatusValidacao = ['pendente', 'dados_aprovados'];
                                     <input type="file" name="comprovante_matricula" accept=".jpg,.jpeg,.png,.pdf" style="display:none;" onchange="this.form.submit()" id="mat_<?= $insc['id'] ?>">
                                     <label for="mat_<?= $insc['id'] ?>" style="cursor:pointer; color:#1976d2;">📎</label>
                                 </form>
-                            <?php elseif ($temMatricula): ?>
-                                <span title="Já anexado">✅</span>
+                            <?php elseif ($temMatricula && !$insc['matricula_validada']): ?>
+                                <!-- Botão de Validação Manual -->
+                                <a href="?validar_matricula_manualmente=<?= $insc['id'] ?>&pagina=<?= $pagina ?>&filtro_situacao=<?= urlencode($filtroSituacao) ?>&filtro_status_validacao=<?= urlencode($filtroStatusValidacao) ?>" 
+                                   onclick="return confirm('Validar manualmente o comprovante de matrícula para esta inscrição?')">
+                                    ✅ Validar
+                                </a>
+                                <span title="Já anexado, aguardando validação"> (Aguardando)</span>
+                            <?php elseif ($temMatricula && $insc['matricula_validada']): ?>
+                                <span title="Já anexado e validado">✅ Validado</span>
                             <?php else: ?>
                                 —
                             <?php endif; ?>
@@ -412,9 +471,7 @@ $possiveisStatusValidacao = ['pendente', 'dados_aprovados'];
                             <?php endif; ?>
                         </td>
                         <td class="acoes">
-                            <!-- --- MUDANÇA AQUI --- -->
                             <?php if ($insc['situacao'] === 'cie_emitida_aguardando_entrega'): ?>
-                                <!-- Link para página de logística -->
                                 <a href="logistica_entregas.php?inscricao_id=<?= $insc['id'] ?>" title="Gerenciar logística de entrega">
                                     🚚
                                 </a>
@@ -428,7 +485,6 @@ $possiveisStatusValidacao = ['pendente', 'dados_aprovados'];
                             <?php else: ?>
                                 —
                             <?php endif; ?>
-                            <!-- --- FIM MUDANÇA --- -->
                         </td>
                     </tr>
                     <?php endforeach; ?>
