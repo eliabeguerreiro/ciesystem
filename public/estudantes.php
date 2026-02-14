@@ -116,10 +116,10 @@ if ($_POST) {
 
                 // --- Processar Documentos de Identidade na Edição ---
                 if ($tipoDocIdentidade && !empty($docFrente['name']) && !empty($docVerso['name'])) {
-                    // Deletar documentos antigos do mesmo tipo (frente e verso)
+                    // Deletar documentos antigos do mesmo tipo (frente e verso) - O modelo DocumentoEstudante.php atualizado lida com isso
                     $docIdentidadeModel->deletarPorEstudanteETipo($estudante->id, $tipoDocIdentidade);
 
-                    // Salvar os novos documentos (frente e verso)
+                    // Salvar os novos documentos (frente e verso) - O modelo DocumentoEstudante.php atualizado lida com isso
                     if (!$docIdentidadeModel->salvarFrenteVerso($estudante->id, $docFrente, $docVerso, $tipoDocIdentidade)) {
                         $erro = "Erro ao salvar os novos documentos de identidade (Frente e Verso).";
                     }
@@ -136,10 +136,13 @@ if ($_POST) {
 
                     if ($inscricaoAssoc) {
                         $inscricaoId = $inscricaoAssoc['id'];
+                        // O modelo Inscricao.php atualizado lida com 'documentos_anexados'
                         $inscricaoTemp = new Inscricao($db);
                         $inscricaoTemp->id = $inscricaoId;
-                        if ($inscricaoTemp->salvarDocumentos($_FILES['comprovante_matricula'], 'matricula')) {
-                             // --- LÓGICA DE VALIDAÇÃO AUTOMÁTICA NA EDIÇÃO ---
+                        if (!$inscricaoTemp->salvarDocumentos($_FILES['comprovante_matricula'], 'matricula')) {
+                            $erro = "Erro ao salvar o comprovante de matrícula.";
+                        } else {
+                             // --- LÓGICA DE VALIDAÇÃO AUTOMÁTICA NA EDIÇÃO (se aplicável) ---
                              // Obter dados da inscrição e do estudante para verificar origem e status
                              $dadosInscricao = $inscricaoTemp->buscarPorId($inscricaoTemp->id);
                              if ($dadosInscricao) {
@@ -195,8 +198,6 @@ if ($_POST) {
                                   );
                              }
                              // === FIM LÓGICA DE VALIDAÇÃO AUTOMÁTICA ---
-                        } else {
-                            $erro = "Erro ao salvar o comprovante de matrícula.";
                         }
                     } else {
                         $erro = "Erro: Não foi encontrada uma inscrição associada para anexar o comprovante de matrícula.";
@@ -240,6 +241,7 @@ if ($_POST) {
 
                     // === SALVAR DOCUMENTOS DE IDENTIDADE (Opcional, mas obrigatório se o tipo for selecionado) ===
                     if ($tipoDocIdentidade && $docFrente && $docVerso) {
+                        // O modelo DocumentoEstudante.php atualizado lida com 'documentos_anexados'
                         if (!$docIdentidadeModel->salvarFrenteVerso($novoEstudanteId, $docFrente, $docVerso, $tipoDocIdentidade)) {
                             $erro = "Erro ao salvar os documentos de identidade (Frente e Verso).";
                             // Opcional: deletar o estudante e a inscrição recém-criados se o upload falhar?
@@ -248,9 +250,12 @@ if ($_POST) {
                         } else {
                              // --- NOVO: Processar Comprovante de Matrícula no Cadastro ---
                              if (!empty($_FILES['comprovante_matricula']['name'])) {
+                                 // O modelo Inscricao.php atualizado lida com 'documentos_anexados'
                                  $inscricaoTemp = new Inscricao($db);
                                  $inscricaoTemp->id = $idInscricaoRecemCriada; // Usar o ID da inscrição recém-criada
-                                 if ($inscricaoTemp->salvarDocumentos($_FILES['comprovante_matricula'], 'matricula')) {
+                                 if (!$inscricaoTemp->salvarDocumentos($_FILES['comprovante_matricula'], 'matricula')) {
+                                     $erro = "Erro ao salvar o comprovante de matrícula.";
+                                 } else {
                                       // --- LÓGICA DE VALIDAÇÃO AUTOMÁTICA NO CADASTRO ---
                                       // Obter dados da inscrição e do estudante para verificar origem e status
                                       $dadosInscricao = $inscricaoTemp->buscarPorId($inscricaoTemp->id);
@@ -307,9 +312,6 @@ if ($_POST) {
                                            );
                                       }
                                       // === FIM LÓGICA DE VALIDAÇÃO AUTOMÁTICA ---
-                                 } else {
-                                     $erro = "Erro ao salvar o comprovante de matrícula.";
-                                     // Opcional: lidar com falha no upload da matrícula (ex: rollback da inscrição?)
                                  }
                              } else {
                                   // Se não for enviado tipo e arquivos, é aceitável para cadastro.
@@ -333,10 +335,13 @@ if ($_POST) {
                          // Se não for enviado tipo e arquivos, é aceitável para cadastro.
                          // --- NOVO: Processar Comprovante de Matrícula no Cadastro (sem doc identidade) ---
                          if (!empty($_FILES['comprovante_matricula']['name'])) {
+                             // O modelo Inscricao.php atualizado lida com 'documentos_anexados'
                              $inscricaoTemp = new Inscricao($db);
                              $inscricaoTemp->id = $idInscricaoRecemCriada; // Usar o ID da inscrição recém-criada
-                             if ($inscricaoTemp->salvarDocumentos($_FILES['comprovante_matricula'], 'matricula')) {
-                                  // --- LÓGICA DE VALIDAÇÃO AUTOMÁTICA NO CADASTRO ---
+                             if (!$inscricaoTemp->salvarDocumentos($_FILES['comprovante_matricula'], 'matricula')) {
+                                 $erro = "Erro ao salvar o comprovante de matrícula.";
+                             } else {
+                                  // --- LÓGICA DE VALIDAÇÃO AUTOMÁTICA NO CADASTRO (sem doc identidade) ---
                                   // Obter dados da inscrição e do estudante para verificar origem e status
                                   $dadosInscricao = $inscricaoTemp->buscarPorId($inscricaoTemp->id);
                                   if ($dadosInscricao) {
@@ -392,8 +397,6 @@ if ($_POST) {
                                        );
                                   }
                                   // === FIM LÓGICA DE VALIDAÇÃO AUTOMÁTICA ---
-                             } else {
-                                 $erro = "Erro ao salvar o comprovante de matrícula.";
                              }
                          } else {
                               // Se não for enviado tipo e arquivos, é aceitável para cadastro.
@@ -440,6 +443,7 @@ if (isset($_GET['deletar'])) {
             $estudanteCtrl->deletarFotoAntiga($registro['foto']);
         }
         // Deleta TODOS os documentos de identidade associados (irá apagar frente e verso de todos os tipos)
+        // O modelo DocumentoEstudante.php atualizado lida com 'documentos_anexados'
         $docIdentidadeModel->deletarPorEstudanteETipo($estudante->id, 'rg');
         $docIdentidadeModel->deletarPorEstudanteETipo($estudante->id, 'cnh');
         $docIdentidadeModel->deletarPorEstudanteETipo($estudante->id, 'passaporte');
@@ -492,6 +496,7 @@ if (isset($_GET['editar'])) {
         if ($inscricaoAssoc) {
             $inscricaoId = $inscricaoAssoc['id'];
             $inscricaoTemp = new Inscricao($db);
+            // O modelo Inscricao.php atualizado lida com 'documentos_anexados'
             $documentosMatricula = $inscricaoTemp->getDocumentos(); // Obtém todos os docs da inscrição
         }
     }
@@ -640,8 +645,8 @@ $estudantes = $estudante->listar();
             <!-- Comprovante de Matrícula -->
             <div class="form-row">
                 <div class="form-group">
-                    <label>Comprovante de Matrícula *</label> <!-- Adicionado asterisco -->
-                    <input type="file" name="comprovante_matricula" accept=".jpg,.jpeg,.png,.pdf" required> <!-- Adicionado 'required' -->
+                    <label>Comprovante de Matrícula</label>
+                    <input type="file" name="comprovante_matricula" accept=".jpg,.jpeg,.png,.pdf">
                     <?php if ($editar && !empty($documentosMatricula)):
                         foreach ($documentosMatricula as $doc):
                             if ($doc['tipo'] === 'matricula'): ?>

@@ -27,14 +27,14 @@ DROP TABLE IF EXISTS `documentos_estudante`;
 CREATE TABLE `documentos_estudante` (
   `id` int NOT NULL AUTO_INCREMENT,
   `estudante_id` int NOT NULL,
-  `tipo` enum('rg','cnh','passaporte','cpf') COLLATE utf8mb4_unicode_ci NOT NULL,
+  `tipo` enum('rg','cnh','passaporte','cpf','selfie_documento') CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `caminho_arquivo` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   `descricao` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `criado_em` datetime DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   KEY `estudante_id` (`estudante_id`),
   CONSTRAINT `documentos_estudante_ibfk_1` FOREIGN KEY (`estudante_id`) REFERENCES `estudantes` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=49 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -43,7 +43,6 @@ CREATE TABLE `documentos_estudante` (
 
 LOCK TABLES `documentos_estudante` WRITE;
 /*!40000 ALTER TABLE `documentos_estudante` DISABLE KEYS */;
-INSERT INTO `documentos_estudante` VALUES (1,10,'rg','uploads/documentos_estudante/doc_identidade_rg_697ac82fde21c.jpg','WhatsApp-Image-2026-01-14-at-13.04.10.jpg','2026-01-28 23:38:39');
 /*!40000 ALTER TABLE `documentos_estudante` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -57,7 +56,7 @@ DROP TABLE IF EXISTS `documentos_inscricao`;
 CREATE TABLE `documentos_inscricao` (
   `id` int NOT NULL AUTO_INCREMENT,
   `inscricao_id` int NOT NULL,
-  `tipo` enum('matricula','pagamento') COLLATE utf8mb4_unicode_ci NOT NULL,
+  `tipo` enum('matricula','pagamento') CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `caminho_arquivo` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   `descricao` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `criado_em` datetime DEFAULT CURRENT_TIMESTAMP,
@@ -65,7 +64,7 @@ CREATE TABLE `documentos_inscricao` (
   KEY `fk_inscricao` (`inscricao_id`),
   CONSTRAINT `documentos_inscricao_ibfk_1` FOREIGN KEY (`inscricao_id`) REFERENCES `inscricoes` (`id`) ON DELETE CASCADE,
   CONSTRAINT `fk_inscricao` FOREIGN KEY (`inscricao_id`) REFERENCES `inscricoes` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=7 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=26 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -74,7 +73,6 @@ CREATE TABLE `documentos_inscricao` (
 
 LOCK TABLES `documentos_inscricao` WRITE;
 /*!40000 ALTER TABLE `documentos_inscricao` DISABLE KEYS */;
-INSERT INTO `documentos_inscricao` VALUES (1,5,'matricula','uploads/comprovantes/matricula/doc_matricula_69807c444ce77.png','vivenciar_logov2.png','2026-02-02 07:28:20'),(2,5,'pagamento','uploads/comprovantes/pagamento/doc_pagamento_69807c4dbe9d7.jpg','WhatsApp-Image-2026-01-14-at-13.04.10.jpg','2026-02-02 07:28:29'),(5,8,'matricula','uploads/comprovantes/matricula/doc_matricula_6983673383047.jpg','1ebd.jpg','2026-02-04 12:35:15'),(6,9,'matricula','uploads/comprovantes/matricula/doc_matricula_69836a964f58e.jpg','channels4_profile.jpg','2026-02-04 12:49:42');
 /*!40000 ALTER TABLE `documentos_inscricao` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -105,10 +103,10 @@ CREATE TABLE `estudantes` (
   `telefone` varchar(20) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `criado_em` datetime DEFAULT CURRENT_TIMESTAMP,
   `atualizado_em` datetime DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
+  `instituicao_id` int NOT NULL,
   PRIMARY KEY (`id`),
-  UNIQUE KEY `matricula` (`matricula`),
   UNIQUE KEY `cpf` (`cpf`)
-) ENGINE=InnoDB AUTO_INCREMENT=16 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=37 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -117,38 +115,8 @@ CREATE TABLE `estudantes` (
 
 LOCK TABLES `estudantes` WRITE;
 /*!40000 ALTER TABLE `estudantes` DISABLE KEYS */;
-INSERT INTO `estudantes` VALUES (8,'teste casa','2025-12-29','58998563255','RG','5689123','ssfs','uploads/fotos/estudante_697ac7616e6f2.jpeg','teste casa','teste casa','teste casa','teste casa','teste casa','Matriculado','dados_aprovados','eliabepaz.work@gmail.com','81988668870','2026-01-28 23:35:13',NULL),(10,'teste casa2','2026-01-16','56666566565','RG','9874656','kkak','uploads/fotos/estudante_697ac82fdd391.jpeg','teste casa2','teste casa2','teste casa2','teste casa2','teste casa2','Matriculado','dados_aprovados','eliabepaz.work@gmail.com','81988668870','2026-01-28 23:38:39',NULL),(14,'teste 04-02','2026-01-25','22235698565','RG','65669684','','uploads/fotos/estudante_698367337dff2.jpg','teste 04-02','teste 04-02','teste 04-02','teste 04-02','teste 04-02','Matriculado','pendente','eliabepaz.work@gmail.com','81988668870','2026-02-04 12:35:15',NULL),(15,'teste 04-02_novo','2024-01-29','12332112312','RG','56665565','aawsa','uploads/fotos/estudante_69836a964df64.jpeg','teste 04-02_novo','teste 04-02_novo','teste 04-02_novo','teste 04-02_novo','teste 04-02_novo','Matriculado','pendente','teste@teste.com','98688779944','2026-02-04 12:49:42',NULL);
 /*!40000 ALTER TABLE `estudantes` ENABLE KEYS */;
 UNLOCK TABLES;
-/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
-/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
-/*!50003 SET @saved_col_connection = @@collation_connection */ ;
-/*!50003 SET character_set_client  = utf8mb4 */ ;
-/*!50003 SET character_set_results = utf8mb4 */ ;
-/*!50003 SET collation_connection  = utf8mb4_0900_ai_ci */ ;
-/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
-/*!50003 SET sql_mode              = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION' */ ;
-DELIMITER ;;
-/*!50003 CREATE*/ /*!50017 DEFINER=`root`@`localhost`*/ /*!50003 TRIGGER `after_estudante_insert` AFTER INSERT ON `estudantes` FOR EACH ROW BEGIN
-    IF NEW.status_validacao = 'dados_aprovados' THEN
-        INSERT INTO inscricoes (
-            estudante_id,
-            codigo_inscricao,
-            data_validade,
-            situacao
-        ) VALUES (
-            NEW.id,
-            UUID(), -- ← Função nativa do MySQL, sempre disponível
-            CONCAT(YEAR(CURDATE()) + 1, '-03-31'),
-            'pagamento_pendente'
-        );
-    END IF;
-END */;;
-DELIMITER ;
-/*!50003 SET sql_mode              = @saved_sql_mode */ ;
-/*!50003 SET character_set_client  = @saved_cs_client */ ;
-/*!50003 SET character_set_results = @saved_cs_results */ ;
-/*!50003 SET collation_connection  = @saved_col_connection */ ;
 
 --
 -- Table structure for table `inscricoes`
@@ -163,13 +131,16 @@ CREATE TABLE `inscricoes` (
   `codigo_inscricao` varchar(36) COLLATE utf8mb4_unicode_ci NOT NULL,
   `data_emissao` date DEFAULT (curdate()),
   `data_validade` date NOT NULL,
-  `situacao` enum('aguardando_validacao','dados_aprovados','pagamento_pendente','documentos_anexados','pago','cie_emitida') COLLATE utf8mb4_unicode_ci DEFAULT 'aguardando_validacao',
+  `situacao` enum('aguardando_validacao','dados_aprovados','pagamento_pendente','documentos_anexados','pago','cie_emitida_aguardando_entrega','cie_entregue_na_instituicao') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'pagamento_pendente',
   `criado_em` datetime DEFAULT CURRENT_TIMESTAMP,
+  `pagamento_confirmado` tinyint(1) NOT NULL DEFAULT '0',
+  `matricula_validada` tinyint(1) NOT NULL DEFAULT '0',
+  `origem` enum('estudante','administrador') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'estudante',
   PRIMARY KEY (`id`),
   UNIQUE KEY `cie_codigo` (`codigo_inscricao`),
   KEY `estudante_id` (`estudante_id`),
   CONSTRAINT `inscricoes_ibfk_1` FOREIGN KEY (`estudante_id`) REFERENCES `estudantes` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=10 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=33 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -178,8 +149,77 @@ CREATE TABLE `inscricoes` (
 
 LOCK TABLES `inscricoes` WRITE;
 /*!40000 ALTER TABLE `inscricoes` DISABLE KEYS */;
-INSERT INTO `inscricoes` VALUES (4,8,'2395db65-fcbb-11f0-9bad-0ccc47ea4795','2026-01-28','2027-03-31','pagamento_pendente','2026-01-28 23:35:13'),(5,10,'9ea36728-fcbb-11f0-9bad-0ccc47ea4795','2026-01-28','2027-03-31','pago','2026-01-28 23:38:39'),(8,14,'10520791-7d78-40ba-979b-b19cdccce7b6','2026-02-04','2027-03-31','pagamento_pendente','2026-02-04 12:35:15'),(9,15,'30834586-4e7b-44d6-9737-d8f7db5e77c6','2026-02-04','2027-03-31','pagamento_pendente','2026-02-04 12:49:42');
 /*!40000 ALTER TABLE `inscricoes` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `instituicoes`
+--
+
+DROP TABLE IF EXISTS `instituicoes`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `instituicoes` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `nome` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `endereco` text COLLATE utf8mb4_unicode_ci,
+  `cidade` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `estado` char(2) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `cep` varchar(10) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `status` enum('ativa','inativa') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'ativa',
+  `criado_em` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `atualizado_em` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `instituicoes`
+--
+
+LOCK TABLES `instituicoes` WRITE;
+/*!40000 ALTER TABLE `instituicoes` DISABLE KEYS */;
+INSERT INTO `instituicoes` VALUES (1,'teste 1','teste endereco','Recife','PE','50800250','ativa','2026-02-09 16:32:02','2026-02-09 16:32:02'),(2,'testeMV','testeMV','testeMV','TE','','ativa','2026-02-09 23:11:24','2026-02-09 23:11:24');
+/*!40000 ALTER TABLE `instituicoes` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `logistica_entregas`
+--
+
+DROP TABLE IF EXISTS `logistica_entregas`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `logistica_entregas` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `inscricao_id` int NOT NULL,
+  `instituicao_id` int NOT NULL,
+  `status` enum('saida_para_entrega','entregue_na_instituicao') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'saida_para_entrega',
+  `responsavel_saida` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `data_saida` datetime DEFAULT NULL,
+  `responsavel_entrega` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `data_entrega_instituicao` datetime DEFAULT NULL,
+  `observacoes` text COLLATE utf8mb4_unicode_ci,
+  `registrado_por` int DEFAULT NULL,
+  `criado_em` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `atualizado_em` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `inscricao_id` (`inscricao_id`),
+  KEY `instituicao_id` (`instituicao_id`),
+  KEY `registrado_por` (`registrado_por`),
+  CONSTRAINT `logistica_entregas_ibfk_1` FOREIGN KEY (`inscricao_id`) REFERENCES `inscricoes` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `logistica_entregas_ibfk_2` FOREIGN KEY (`instituicao_id`) REFERENCES `instituicoes` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `logistica_entregas_ibfk_3` FOREIGN KEY (`registrado_por`) REFERENCES `usuarios` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `logistica_entregas`
+--
+
+LOCK TABLES `logistica_entregas` WRITE;
+/*!40000 ALTER TABLE `logistica_entregas` DISABLE KEYS */;
+/*!40000 ALTER TABLE `logistica_entregas` ENABLE KEYS */;
 UNLOCK TABLES;
 
 --
@@ -191,7 +231,7 @@ DROP TABLE IF EXISTS `logs`;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `logs` (
   `id` int NOT NULL AUTO_INCREMENT,
-  `user_id` int NOT NULL,
+  `user_id` int DEFAULT NULL,
   `acao` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
   `descricao` text COLLATE utf8mb4_unicode_ci,
   `registro_id` int DEFAULT NULL,
@@ -200,7 +240,7 @@ CREATE TABLE `logs` (
   PRIMARY KEY (`id`),
   KEY `user_id` (`user_id`),
   CONSTRAINT `logs_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `usuarios` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=16 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=19 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -209,7 +249,7 @@ CREATE TABLE `logs` (
 
 LOCK TABLES `logs` WRITE;
 /*!40000 ALTER TABLE `logs` DISABLE KEYS */;
-INSERT INTO `logs` VALUES (1,1,'excluiu_usuario','ID: 2',2,'usuarios','2025-12-18 07:38:17'),(2,1,'criou_usuario','Nome: bruce, Email: bruce@loses, Tipo: user',3,'usuarios','2025-12-18 07:38:53'),(3,1,'editou_usuario','ID: 3, Nome: bruces, Email: bruce@loses, Tipo: user',3,'usuarios','2025-12-18 07:39:25'),(4,1,'editou_estudante','ID: 1, Nome: Eliabe Guerreiro da Pazz, Matrícula: 201610040010',1,'estudantes','2025-12-18 07:43:34'),(5,1,'editou_estudante','ID: 1, Nome: Eliabe Guerreiro da Paz, Matrícula: 201610040010',1,'estudantes','2025-12-18 07:44:18'),(6,1,'criou_estudante','Nome: teste casa, Matrícula: 65989865, Curso: teste casa',2,'estudantes','2026-01-28 21:49:23'),(7,1,'excluiu_estudante','ID: 3, Nome: teste casa',3,'estudantes','2026-01-28 22:46:11'),(8,1,'excluiu_estudante','ID: 3, Nome: ',3,'estudantes','2026-01-28 23:20:37'),(9,1,'excluiu_estudante','ID: 5, Nome: teste casa',5,'estudantes','2026-01-28 23:20:47'),(10,1,'criou_estudante','Estudante: teste casa, Matrícula: teste casa',7,'estudantes','2026-01-28 23:22:05'),(11,1,'excluiu_estudante','ID: 5, Nome: ',5,'estudantes','2026-01-28 23:22:05'),(12,1,'criou_estudante','Estudante: teste casa2, Matrícula: teste casa2',10,'estudantes','2026-01-28 23:38:39'),(13,1,'confirmou_pagamento','Inscrição ID: 5',5,'inscricoes','2026-02-02 07:29:02'),(14,1,'excluiu_estudante','ID: 13, Nome: levy teste',13,'estudantes','2026-02-04 12:47:31'),(15,1,'excluiu_estudante','ID: 12, Nome: teste 02-02',12,'estudantes','2026-02-04 12:47:37');
+INSERT INTO `logs` VALUES (1,1,'criou_usuario','Nome: levy, Email: levy@admin.com, Tipo: admin',4,'usuarios','2026-02-14 15:26:21'),(2,1,'criou_usuario','Nome: arielly, Email: arielly@teste.com, Tipo: user',5,'usuarios','2026-02-14 15:27:08'),(3,NULL,'inscricao_publica_realizada','Estudante: teste_public, CPF: 12312312312, Código Inscrição: a82bab79-5c05-4809-8a44-4cd54495f557',28,'inscricoes','2026-02-14 15:28:59'),(4,1,'criou_estudante_manualmente','Estudante: teste_pelo_sistema, Matrícula: teste_pelo_sistema',33,'estudantes','2026-02-14 15:32:03'),(5,1,'anexou_e_validou_comprovante_matricula','Inscrição ID: 29, Estudante ID: 33',29,'inscricoes','2026-02-14 15:32:50'),(6,1,'admin_validou_matricula_manualmente','Inscrição ID: 28, Estudante ID: 32',28,'inscricoes','2026-02-14 15:33:04'),(7,1,'anexou_e_confirmou_comprovante_pagamento','Inscrição ID: 29',29,'inscricoes','2026-02-14 15:39:02'),(8,1,'anexou_e_confirmou_comprovante_pagamento','Inscrição ID: 28',28,'inscricoes','2026-02-14 15:39:07'),(9,1,'cie_pronta_para_entrega','Inscrição ID: 29',29,'inscricoes','2026-02-14 15:59:53'),(10,1,'editou_estudante','ID: 33, Nome: teste_pelo_sistemaa, Matrícula: teste_pelo_sistema',33,'estudantes','2026-02-14 16:29:29'),(11,1,'criou_estudante_manualmente','Estudante: teste pao, Matrícula: teste pao',34,'estudantes','2026-02-14 16:51:06'),(12,1,'excluiu_estudante','ID: 34, Nome: teste pao',34,'estudantes','2026-02-14 17:27:01'),(13,1,'excluiu_estudante','ID: 33, Nome: teste_pelo_sistemaa',33,'estudantes','2026-02-14 17:27:03'),(14,1,'excluiu_estudante','ID: 32, Nome: teste_public',32,'estudantes','2026-02-14 17:27:05'),(15,1,'criou_estudante_manualmente','Estudante: teste_admin, Matrícula: teste_admin',35,'estudantes','2026-02-14 17:28:07'),(16,1,'excluiu_estudante','ID: 35, Nome: teste_admin',35,'estudantes','2026-02-14 17:28:15'),(17,1,'criou_estudante_manualmente','Estudante: teste_admin, Matrícula: teste_admin',36,'estudantes','2026-02-14 17:29:04'),(18,1,'excluiu_estudante','ID: 36, Nome: teste_admin',36,'estudantes','2026-02-14 18:14:43');
 /*!40000 ALTER TABLE `logs` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -229,7 +269,7 @@ CREATE TABLE `usuarios` (
   `criado_em` datetime DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   UNIQUE KEY `email` (`email`)
-) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=6 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -238,17 +278,9 @@ CREATE TABLE `usuarios` (
 
 LOCK TABLES `usuarios` WRITE;
 /*!40000 ALTER TABLE `usuarios` DISABLE KEYS */;
-INSERT INTO `usuarios` VALUES (1,'hants','hants@ciesytem.local','$2y$10$F4wcNlLHQyyn5Zj1ReSGE.aPtq.W2yzuIVdO/sMnjQG/qWjUZOWF.','admin','2025-12-17 19:13:52');
+INSERT INTO `usuarios` VALUES (1,'hants','hants@ciesytem.local','$2y$10$F4wcNlLHQyyn5Zj1ReSGE.aPtq.W2yzuIVdO/sMnjQG/qWjUZOWF.','admin','2025-12-17 19:13:52'),(4,'levy','levy@admin.com','$2y$10$cc85/23ApJZKwMdgUxmPyuYp/CnggcfmJZxJP364HKIBCFppIjyMG','admin','2026-02-14 15:26:21'),(5,'arielly','arielly@teste.com','$2y$10$AT0se4NlZOi/iyvlbQVbA./CK43KvWMTjeQlavdYl8QFYeOsIAjry','user','2026-02-14 15:27:08');
 /*!40000 ALTER TABLE `usuarios` ENABLE KEYS */;
 UNLOCK TABLES;
-
---
--- Dumping events for database 'ciesytem'
---
-
---
--- Dumping routines for database 'ciesytem'
---
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
 
 /*!40101 SET SQL_MODE=@OLD_SQL_MODE */;
@@ -259,4 +291,4 @@ UNLOCK TABLES;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2026-02-04 12:54:55
+-- Dump completed on 2026-02-14 18:15:22

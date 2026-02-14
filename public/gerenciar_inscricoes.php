@@ -166,14 +166,16 @@ if ($_GET) {
             $estudanteId = $dadosInscricao['estudante_id'];
 
             // Verificar se o comprovante de matrícula foi anexado
-            $docs = $inscTemp->getDocumentos();
+            // --- ATUALIZADO: Agora busca da nova tabela documentos_anexados ---
+            $docs = $inscTemp->getDocumentos(); // O modelo Inscricao.php atualizado já faz isso
             $temMatricula = false;
             foreach ($docs as $doc) {
-                if ($doc['tipo'] === 'matricula') {
+                if ($doc['tipo'] === 'matricula') { // Procura por 'matricula' na nova estrutura
                     $temMatricula = true;
                     break;
                 }
             }
+            // --- FIM ATUALIZADO ---
 
             if ($temMatricula && !$dadosInscricao['matricula_validada']) { // Só prosseguir se anexado e ainda não validado
                 if ($inscTemp->atualizarMatriculaValidada(true)) {
@@ -349,7 +351,7 @@ $possiveisStatusValidacao = ['pendente', 'dados_aprovados'];
                         <th>Status Validação</th>
                         <th>Matrícula Anexada</th>
                         <th>Pagamento Anexado</th>
-                        <th>Matrícula Validada</th>
+                        <th>Documentos Validados</th> <!-- Renomeada coluna -->
                         <th>Pagamento Confirmado</th>
                         <th>Documentos</th>
                         <!-- REMOVIDO: <th>Anexar Matrícula</th> -->
@@ -382,11 +384,15 @@ $possiveisStatusValidacao = ['pendente', 'dados_aprovados'];
                             <?php
                             $inscTemp = new Inscricao($db);
                             $inscTemp->id = $insc['id'];
-                            $docs = $inscTemp->getDocumentos();
+                            // --- ATUALIZADO: Agora busca da nova tabela documentos_anexados ---
+                            $docs = $inscTemp->getDocumentos(); // O modelo Inscricao.php atualizado já faz isso
                             $temMatricula = false;
                             foreach ($docs as $doc) {
+                                // Procura por 'matricula' ou 'matricula_frente', 'matricula_verso' se for dividido
+                                // Assumindo que o tipo é 'matricula' para o comprovante principal
                                 if ($doc['tipo'] === 'matricula') { $temMatricula = true; break; }
                             }
+                            // --- FIM ATUALIZADO ---
                             $statusClass = 'status-boolean ' . ($temMatricula ? 'status-true' : 'status-false');
                             echo '<span class="' . $statusClass . '">' . ($temMatricula ? 'Sim' : 'Não') . '</span>';
                             ?>
@@ -394,9 +400,11 @@ $possiveisStatusValidacao = ['pendente', 'dados_aprovados'];
                         <td>
                             <?php
                             $temPagamento = false;
-                            foreach ($docs as $doc) {
+                            // --- ATUALIZADO: Agora busca da nova tabela documentos_anexados ---
+                            foreach ($docs as $doc) { // $docs já foi buscado acima
                                 if ($doc['tipo'] === 'pagamento') { $temPagamento = true; break; }
                             }
+                            // --- FIM ATUALIZADO ---
                             $statusClass = 'status-boolean ' . ($temPagamento ? 'status-true' : 'status-false');
                             echo '<span class="' . $statusClass . '">' . ($temPagamento ? 'Sim' : 'Não') . '</span>';
                             ?>
@@ -404,6 +412,9 @@ $possiveisStatusValidacao = ['pendente', 'dados_aprovados'];
                         <td>
                             <?php
                             $statusClass = 'status-boolean ' . ($insc['matricula_validada'] ? 'status-true' : 'status-false');
+                            // A coluna 'Documentos Validados' agora reflete o campo 'matricula_validada'
+                            // Este campo será usado para indicar se *todos* os documentos relevantes para a inscrição (matrícula, identidade, etc.) foram validados.
+                            // Por enquanto, ele reflete apenas a validação da matrícula, como era antes.
                             echo '<span class="' . $statusClass . '">' . ($insc['matricula_validada'] ? 'Sim' : 'Não') . '</span>';
                             ?>
                         </td>
@@ -419,6 +430,7 @@ $possiveisStatusValidacao = ['pendente', 'dados_aprovados'];
                                 echo "—";
                             } else {
                                 foreach ($docs as $doc) {
+                                    // --- ATUALIZADO: Tipos de documentos podem vir da nova estrutura ---
                                     switch ($doc['tipo'] ?? '') {
                                         case 'matricula':
                                             $nomeAmigavel = 'Comprovante de Matrícula';
@@ -426,10 +438,24 @@ $possiveisStatusValidacao = ['pendente', 'dados_aprovados'];
                                         case 'pagamento':
                                             $nomeAmigavel = 'Comprovante de Pagamento';
                                             break;
-                                        // REMOVIDO: case 'selfie':
+                                        // Exemplos de novos tipos que podem aparecer
+                                        case 'rg_frente':
+                                            $nomeAmigavel = 'RG (Frente)';
+                                            break;
+                                        case 'rg_verso':
+                                            $nomeAmigavel = 'RG (Verso)';
+                                            break;
+                                        case 'cpf_frente':
+                                            $nomeAmigavel = 'CPF (Frente)';
+                                            break;
+                                        case 'cpf_verso':
+                                            $nomeAmigavel = 'CPF (Verso)';
+                                            break;
+                                        // ... outros tipos
                                         default:
                                             $nomeAmigavel = 'Documento (' . htmlspecialchars($doc['tipo']) . ')';
                                     }
+                                    // --- FIM ATUALIZADO ---
                                     echo '<div><a href="' . htmlspecialchars($doc['caminho_arquivo']) . '" target="_blank" class="doc-link">'
                                         . $nomeAmigavel . '</a></div>';
                                 }

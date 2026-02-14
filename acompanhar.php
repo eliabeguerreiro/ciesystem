@@ -58,11 +58,12 @@ if ($_POST) {
         .status-box { background: #f5f5f5; padding: 15px; border-radius: 6px; margin-top: 20px; }
         .status-pendente,
         .status-aguardando_validacao { color: #f57c00; }
-        .status-dados_aprovados,
-        .status-pagamento_pendente { color: #f57c00; font-weight: bold; }
-        .status-documentos_anexados { color: #5d4037; font-weight: bold; }
-        .status-pago { color: #2e7d32; font-weight: bold; }
-        .status-cie_emitida { color: #1565c0; font-weight: bold; }
+        .status-dados_aprovados { color: #f57c00; font-weight: bold; } /* Ex: dados aprovados, aguardando pagamento */
+        .status-pagamento_pendente { color: #f57c00; font-weight: bold; } /* Ex: dados aprovados, aguardando pagamento */
+        .status-documentos_anexados { color: #5d4037; font-weight: bold; } /* Ex: comprovantes anexados */
+        .status-pago { color: #2e7d32; font-weight: bold; } /* Ex: pagamento confirmado */
+        .status-cie_emitida_aguardando_entrega { color: #5d4037; font-weight: bold; } /* Novo status */
+        .status-cie_entregue_na_instituicao { color: #2e7d32; font-weight: bold; } /* Novo status */
         a { color: #1976d2; text-decoration: none; display: inline-block; margin-top: 20px; }
         a:hover { text-decoration: underline; }
         .erro { background: #ffebee; color: #c62828; padding: 10px; border-radius: 4px; margin: 10px 0; }
@@ -82,24 +83,29 @@ if ($_POST) {
                         <?= ucfirst(str_replace('_', ' ', $resultado['situacao'])) ?>
                     </span>
                 </p>
-                <!-- Mensagens orientativas -->
+                <!-- Mensagens orientativas atualizadas -->
                 <?php
                 switch ($resultado['situacao']) {
                     case 'aguardando_validacao':
-                        echo '<p style="color:#f57c00;">Sua inscrição está em análise. Aguarde a validação dos documentos.</p>';
+                        echo '<p style="color:#f57c00;">Sua inscrição foi recebida e está em análise. Aguarde a validação dos dados e documentos.</p>';
                         break;
-                    case 'dados_aprovados':
-                    case 'pagamento_pendente':
-                        echo '<p style="color:#f57c00;">Seus dados foram Registrados Aguarde aprovação dos dados de matricula e instruções para pagamento.</p>';
+                    case 'dados_aprovados': // Ajuste de mensagem
+                        echo '<p style="color:#f57c00;">Seus dados foram aprovados. Aguarde instruções para pagamento.</p>';
                         break;
-                    case 'documentos_anexados':
+                    case 'pagamento_pendente': // Ajuste de mensagem
+                        echo '<p style="color:#f57c00;">Seus dados foram aprovados. Aguarde confirmação do pagamento.</p>';
+                        break;
+                    case 'documentos_anexados': // Ajuste de mensagem
                         echo '<p style="color:#5d4037;">Documentos recebidos. Aguardando confirmação de pagamento.</p>';
                         break;
-                    case 'pago':
-                        echo '<p style="color:#2e7d32;">Pagamento confirmado! Sua CIE será emitida em breve.</p>';
+                    case 'pago': // Ajuste de mensagem
+                        echo '<p style="color:#2e7d32;">Pagamento confirmado! Sua CIE está sendo preparada para emissão.</p>';
                         break;
-                    case 'cie_emitida':
-                        echo '<p style="color:#1565c0;"><strong>Sua CIE já foi emitida!</strong> Entre em contato para retirada.</p>';
+                    case 'cie_emitida_aguardando_entrega': // Novo status
+                        echo '<p style="color:#5d4037;"><strong>Sua CIE foi emitida!</strong> Agora está aguardando logística de entrega para a instituição.</p>';
+                        break;
+                    case 'cie_entregue_na_instituicao': // Novo status
+                        echo '<p style="color:#2e7d32;"><strong>Sua CIE foi entregue na instituição!</strong> Entre em contato com a secretaria para retirada.</p>';
                         break;
                     default:
                         echo '<p>Em processamento...</p>';
