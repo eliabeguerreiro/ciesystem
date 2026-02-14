@@ -126,6 +126,84 @@ if ($_POST) {
                 }
                 // ---
 
+                // --- NOVO: Processar Comprovante de Matrícula na Edição ---
+                if (!empty($_FILES['comprovante_matricula']['name'])) {
+                    // Obter ID da inscrição associada ao estudante
+                    $stmtInsc = $db->prepare("SELECT id FROM inscricoes WHERE estudante_id = :estudante_id ORDER BY id DESC LIMIT 1");
+                    $stmtInsc->bindParam(':estudante_id', $estudante->id, PDO::PARAM_INT);
+                    $stmtInsc->execute();
+                    $inscricaoAssoc = $stmtInsc->fetch(PDO::FETCH_ASSOC);
+
+                    if ($inscricaoAssoc) {
+                        $inscricaoId = $inscricaoAssoc['id'];
+                        $inscricaoTemp = new Inscricao($db);
+                        $inscricaoTemp->id = $inscricaoId;
+                        if ($inscricaoTemp->salvarDocumentos($_FILES['comprovante_matricula'], 'matricula')) {
+                             // --- LÓGICA DE VALIDAÇÃO AUTOMÁTICA NA EDIÇÃO ---
+                             // Obter dados da inscrição e do estudante para verificar origem e status
+                             $dadosInscricao = $inscricaoTemp->buscarPorId($inscricaoTemp->id);
+                             if ($dadosInscricao) {
+                                 $estudanteId = $dadosInscricao['estudante_id'];
+                                 $origemInscricao = $dadosInscricao['origem'];
+                                 $stmtEstudante = $db->prepare("SELECT status_validacao FROM estudantes WHERE id = :estudante_id");
+                                 $stmtEstudante->bindParam(':estudante_id', $estudanteId, PDO::PARAM_INT);
+                                 $stmtEstudante->execute();
+                                 $dadosEstudante = $stmtEstudante->fetch(PDO::FETCH_ASSOC);
+
+                                 if ($dadosEstudante && $dadosEstudante['status_validacao'] === 'dados_aprovados' && $origemInscricao === 'administrador') {
+                                     // Se o estudante tem status 'dados_aprovados' E a inscrição é do admin, validamos automaticamente
+                                     if ($inscricaoTemp->atualizarMatriculaValidada(true)) {
+                                         $sucesso = "Comprovante de matrícula anexado e validado automaticamente (origem admin, status aprovado).";
+                                         // === LOG: Matrícula anexada e validada automaticamente (admin) ===
+                                         require_once __DIR__ . '/../app/models/Log.php';
+                                         $log = new Log($db);
+                                         $log->registrar(
+                                             $_SESSION['user_id'],
+                                             'anexou_e_validou_comprovante_matricula_admin',
+                                             "Inscrição ID: {$inscricaoTemp->id}, Estudante ID: {$estudanteId}, Origem: {$origemInscricao}",
+                                             $inscricaoTemp->id,
+                                             'inscricoes'
+                                         );
+                                     } else {
+                                         $sucesso = "Comprovante de matrícula anexado, mas falha ao validar automaticamente.";
+                                         // Log de erro pode ser adicionado aqui se necessário
+                                     }
+                                 } else {
+                                     $sucesso = "Comprovante de matrícula anexado. Aguardando validação (status do estudante ou origem não permitem validação automática).";
+                                     // === LOG: Matrícula anexada (aguardando validação) ===
+                                     require_once __DIR__ . '/../app/models/Log.php';
+                                     $log = new Log($db);
+                                     $log->registrar(
+                                         $_SESSION['user_id'],
+                                         'anexou_comprovante_matricula',
+                                         "Inscrição ID: {$inscricaoTemp->id}, Estudante ID: {$estudanteId}, Origem: {$origemInscricao}, Status: " . ($dadosEstudante['status_validacao'] ?? 'Desconhecido'),
+                                         $inscricaoTemp->id,
+                                         'inscricoes'
+                                     );
+                                 }
+                             } else {
+                                  $sucesso = "Comprovante de matrícula anexado (falha na busca de dados da inscrição/estudante).";
+                                  // === LOG: Matrícula anexada (falha na busca) ===
+                                  require_once __DIR__ . '/../app/models/Log.php';
+                                  $log = new Log($db);
+                                  $log->registrar(
+                                      $_SESSION['user_id'],
+                                      'anexou_comprovante_matricula',
+                                      "Inscrição ID: {$inscricaoTemp->id} (Erro: dados do estudante não encontrados)",
+                                      $inscricaoTemp->id,
+                                      'inscricoes'
+                                  );
+                             }
+                             // === FIM LÓGICA DE VALIDAÇÃO AUTOMÁTICA ---
+                        } else {
+                            $erro = "Erro ao salvar o comprovante de matrícula.";
+                        }
+                    } else {
+                        $erro = "Erro: Não foi encontrada uma inscrição associada para anexar o comprovante de matrícula.";
+                    }
+                }
+                // --- FIM NOVO ---
+
                 if (empty($erro)) { // Prosseguir com sucesso se não houve erro no upload
                     // === LOG: Estudante editado ===
                     require_once __DIR__ . '/../app/models/Log.php';
@@ -158,43 +236,182 @@ if ($_POST) {
                 $inscricao->estudante_id = $novoEstudanteId;
                 $inscricao->origem = 'administrador'; // Define a origem como administrador
                 if ($inscricao->criar()) { // Cria a inscrição
+                    $idInscricaoRecemCriada = $db->lastInsertId(); // Obter ID da inscrição recém-criada
+
                     // === SALVAR DOCUMENTOS DE IDENTIDADE (Opcional, mas obrigatório se o tipo for selecionado) ===
                     if ($tipoDocIdentidade && $docFrente && $docVerso) {
                         if (!$docIdentidadeModel->salvarFrenteVerso($novoEstudanteId, $docFrente, $docVerso, $tipoDocIdentidade)) {
                             $erro = "Erro ao salvar os documentos de identidade (Frente e Verso).";
                             // Opcional: deletar o estudante e a inscrição recém-criados se o upload falhar?
                             // $estudante->id = $novoEstudanteId; $estudante->deletar();
-                            // $inscricao->id = $inscricao->id; $inscricao->deletar(); // Precisaria do ID da inscrição criada
+                            // $inscricao->id = $idInscricaoRecemCriada; $inscricao->deletar(); // Precisaria do ID da inscrição criada
                         } else {
-                            $sucesso = "Estudante cadastrado com sucesso!";
-                            // === LOG: Estudante criado (via admin) ===
-                            require_once __DIR__ . '/../app/models/Log.php';
-                            $log = new Log($db);
-                            $log->registrar(
-                                $_SESSION['user_id'], // ID do usuário admin que está fazendo o cadastro
-                                'criou_estudante_manualmente',
-                                "Estudante: {$estudante->nome}, Matrícula: {$estudante->matricula}",
-                                $novoEstudanteId, // ID do estudante recém-criado
-                                'estudantes'
-                            );
-                            // === FIM LOG ===
-                            foreach ($_POST as $key => $value) $_POST[$key] = '';
+                             // --- NOVO: Processar Comprovante de Matrícula no Cadastro ---
+                             if (!empty($_FILES['comprovante_matricula']['name'])) {
+                                 $inscricaoTemp = new Inscricao($db);
+                                 $inscricaoTemp->id = $idInscricaoRecemCriada; // Usar o ID da inscrição recém-criada
+                                 if ($inscricaoTemp->salvarDocumentos($_FILES['comprovante_matricula'], 'matricula')) {
+                                      // --- LÓGICA DE VALIDAÇÃO AUTOMÁTICA NO CADASTRO ---
+                                      // Obter dados da inscrição e do estudante para verificar origem e status
+                                      $dadosInscricao = $inscricaoTemp->buscarPorId($inscricaoTemp->id);
+                                      if ($dadosInscricao) {
+                                          $estudanteId = $dadosInscricao['estudante_id'];
+                                          $origemInscricao = $dadosInscricao['origem'];
+                                          $stmtEstudante = $db->prepare("SELECT status_validacao FROM estudantes WHERE id = :estudante_id");
+                                          $stmtEstudante->bindParam(':estudante_id', $estudanteId, PDO::PARAM_INT);
+                                          $stmtEstudante->execute();
+                                          $dadosEstudante = $stmtEstudante->fetch(PDO::FETCH_ASSOC);
+
+                                          if ($dadosEstudante && $dadosEstudante['status_validacao'] === 'dados_aprovados' && $origemInscricao === 'administrador') {
+                                              // Se o estudante tem status 'dados_aprovados' E a inscrição é do admin, validamos automaticamente
+                                              if ($inscricaoTemp->atualizarMatriculaValidada(true)) {
+                                                  $sucesso = "Estudante cadastrado com sucesso! Comprovante de matrícula anexado e validado automaticamente (origem admin, status aprovado).";
+                                                  // === LOG: Matrícula anexada e validada automaticamente (admin) ===
+                                                  require_once __DIR__ . '/../app/models/Log.php';
+                                                  $log = new Log($db);
+                                                  $log->registrar(
+                                                      $_SESSION['user_id'],
+                                                      'anexou_e_validou_comprovante_matricula_admin',
+                                                      "Inscrição ID: {$inscricaoTemp->id}, Estudante ID: {$estudanteId}, Origem: {$origemInscricao}",
+                                                      $inscricaoTemp->id,
+                                                      'inscricoes'
+                                                  );
+                                              } else {
+                                                  $sucesso = "Estudante cadastrado com sucesso! Comprovante de matrícula anexado, mas falha ao validar automaticamente.";
+                                                  // Log de erro pode ser adicionado aqui se necessário
+                                              }
+                                          } else {
+                                              $sucesso = "Estudante cadastrado com sucesso! Comprovante de matrícula anexado. Aguardando validação (status do estudante ou origem não permitem validação automática).";
+                                              // === LOG: Matrícula anexada (aguardando validação) ===
+                                              require_once __DIR__ . '/../app/models/Log.php';
+                                              $log = new Log($db);
+                                              $log->registrar(
+                                                  $_SESSION['user_id'],
+                                                  'anexou_comprovante_matricula',
+                                                  "Inscrição ID: {$inscricaoTemp->id}, Estudante ID: {$estudanteId}, Origem: {$origemInscricao}, Status: " . ($dadosEstudante['status_validacao'] ?? 'Desconhecido'),
+                                                  $inscricaoTemp->id,
+                                                  'inscricoes'
+                                              );
+                                          }
+                                      } else {
+                                           $sucesso = "Estudante cadastrado com sucesso! Comprovante de matrícula anexado (falha na busca de dados da inscrição/estudante).";
+                                           // === LOG: Matrícula anexada (falha na busca) ===
+                                           require_once __DIR__ . '/../app/models/Log.php';
+                                           $log = new Log($db);
+                                           $log->registrar(
+                                               $_SESSION['user_id'],
+                                               'anexou_comprovante_matricula',
+                                               "Inscrição ID: {$inscricaoTemp->id} (Erro: dados do estudante não encontrados)",
+                                               $inscricaoTemp->id,
+                                               'inscricoes'
+                                           );
+                                      }
+                                      // === FIM LÓGICA DE VALIDAÇÃO AUTOMÁTICA ---
+                                 } else {
+                                     $erro = "Erro ao salvar o comprovante de matrícula.";
+                                     // Opcional: lidar com falha no upload da matrícula (ex: rollback da inscrição?)
+                                 }
+                             } else {
+                                  // Se não for enviado tipo e arquivos, é aceitável para cadastro.
+                                  $sucesso = "Estudante cadastrado com sucesso!";
+                                  // === LOG: Estudante criado (via admin) - sem docs ===
+                                  require_once __DIR__ . '/../app/models/Log.php';
+                                  $log = new Log($db);
+                                  $log->registrar(
+                                      $_SESSION['user_id'], // ID do usuário admin
+                                      'criou_estudante_admin',
+                                      "Estudante: {$estudante->nome}, Matrícula: {$estudante->matricula} (Sem documentos de identidade)",
+                                      $novoEstudanteId, // ID do estudante recém-criado
+                                      'estudantes'
+                                  );
+                                  // === FIM LOG ===
+                                  foreach ($_POST as $key => $value) $_POST[$key] = '';
+                             }
+                             // --- FIM NOVO ---
                         }
                     } else {
                          // Se não for enviado tipo e arquivos, é aceitável para cadastro.
-                         $sucesso = "Estudante cadastrado com sucesso!";
-                         // === LOG: Estudante criado (via admin) - sem docs ===
-                         require_once __DIR__ . '/../app/models/Log.php';
-                         $log = new Log($db);
-                         $log->registrar(
-                             $_SESSION['user_id'], // ID do usuário admin
-                             'criou_estudante_admin',
-                             "Estudante: {$estudante->nome}, Matrícula: {$estudante->matricula} (Sem documentos de identidade)",
-                             $novoEstudanteId, // ID do estudante recém-criado
-                             'estudantes'
-                         );
-                         // === FIM LOG ===
-                         foreach ($_POST as $key => $value) $_POST[$key] = '';
+                         // --- NOVO: Processar Comprovante de Matrícula no Cadastro (sem doc identidade) ---
+                         if (!empty($_FILES['comprovante_matricula']['name'])) {
+                             $inscricaoTemp = new Inscricao($db);
+                             $inscricaoTemp->id = $idInscricaoRecemCriada; // Usar o ID da inscrição recém-criada
+                             if ($inscricaoTemp->salvarDocumentos($_FILES['comprovante_matricula'], 'matricula')) {
+                                  // --- LÓGICA DE VALIDAÇÃO AUTOMÁTICA NO CADASTRO ---
+                                  // Obter dados da inscrição e do estudante para verificar origem e status
+                                  $dadosInscricao = $inscricaoTemp->buscarPorId($inscricaoTemp->id);
+                                  if ($dadosInscricao) {
+                                      $estudanteId = $dadosInscricao['estudante_id'];
+                                      $origemInscricao = $dadosInscricao['origem'];
+                                      $stmtEstudante = $db->prepare("SELECT status_validacao FROM estudantes WHERE id = :estudante_id");
+                                      $stmtEstudante->bindParam(':estudante_id', $estudanteId, PDO::PARAM_INT);
+                                      $stmtEstudante->execute();
+                                      $dadosEstudante = $stmtEstudante->fetch(PDO::FETCH_ASSOC);
+
+                                      if ($dadosEstudante && $dadosEstudante['status_validacao'] === 'dados_aprovados' && $origemInscricao === 'administrador') {
+                                          // Se o estudante tem status 'dados_aprovados' E a inscrição é do admin, validamos automaticamente
+                                          if ($inscricaoTemp->atualizarMatriculaValidada(true)) {
+                                              $sucesso = "Estudante cadastrado com sucesso! Comprovante de matrícula anexado e validado automaticamente (origem admin, status aprovado).";
+                                              // === LOG: Matrícula anexada e validada automaticamente (admin) ===
+                                              require_once __DIR__ . '/../app/models/Log.php';
+                                              $log = new Log($db);
+                                              $log->registrar(
+                                                  $_SESSION['user_id'],
+                                                  'anexou_e_validou_comprovante_matricula_admin',
+                                                  "Inscrição ID: {$inscricaoTemp->id}, Estudante ID: {$estudanteId}, Origem: {$origemInscricao}",
+                                                  $inscricaoTemp->id,
+                                                  'inscricoes'
+                                              );
+                                          } else {
+                                              $sucesso = "Estudante cadastrado com sucesso! Comprovante de matrícula anexado, mas falha ao validar automaticamente.";
+                                              // Log de erro pode ser adicionado aqui se necessário
+                                          }
+                                      } else {
+                                          $sucesso = "Estudante cadastrado com sucesso! Comprovante de matrícula anexado. Aguardando validação (status do estudante ou origem não permitem validação automática).";
+                                          // === LOG: Matrícula anexada (aguardando validação) ===
+                                          require_once __DIR__ . '/../app/models/Log.php';
+                                          $log = new Log($db);
+                                          $log->registrar(
+                                              $_SESSION['user_id'],
+                                              'anexou_comprovante_matricula',
+                                              "Inscrição ID: {$inscricaoTemp->id}, Estudante ID: {$estudanteId}, Origem: {$origemInscricao}, Status: " . ($dadosEstudante['status_validacao'] ?? 'Desconhecido'),
+                                              $inscricaoTemp->id,
+                                              'inscricoes'
+                                          );
+                                      }
+                                  } else {
+                                       $sucesso = "Estudante cadastrado com sucesso! Comprovante de matrícula anexado (falha na busca de dados da inscrição/estudante).";
+                                       // === LOG: Matrícula anexada (falha na busca) ===
+                                       require_once __DIR__ . '/../app/models/Log.php';
+                                       $log = new Log($db);
+                                       $log->registrar(
+                                           $_SESSION['user_id'],
+                                           'anexou_comprovante_matricula',
+                                           "Inscrição ID: {$inscricaoTemp->id} (Erro: dados do estudante não encontrados)",
+                                           $inscricaoTemp->id,
+                                           'inscricoes'
+                                       );
+                                  }
+                                  // === FIM LÓGICA DE VALIDAÇÃO AUTOMÁTICA ---
+                             } else {
+                                 $erro = "Erro ao salvar o comprovante de matrícula.";
+                             }
+                         } else {
+                              // Se não for enviado tipo e arquivos, é aceitável para cadastro.
+                              $sucesso = "Estudante cadastrado com sucesso!";
+                              // === LOG: Estudante criado (via admin) - sem docs ===
+                              require_once __DIR__ . '/../app/models/Log.php';
+                              $log = new Log($db);
+                              $log->registrar(
+                                  $_SESSION['user_id'], // ID do usuário admin
+                                  'criou_estudante_admin',
+                                  "Estudante: {$estudante->nome}, Matrícula: {$estudante->matricula} (Sem documentos de identidade)",
+                                  $novoEstudanteId, // ID do estudante recém-criado
+                                  'estudantes'
+                              );
+                              // === FIM LOG ===
+                              foreach ($_POST as $key => $value) $_POST[$key] = '';
+                         }
+                         // --- FIM NOVO ---
                     }
                 } else {
                     $erro = "Erro ao criar inscrição para o estudante.";
@@ -263,6 +480,21 @@ if (isset($_GET['editar'])) {
         'passaporte' => $docsPassaporte,
         'cpf' => $docsCPF
     ];
+
+    // Carregar documentos de inscrição (matrícula) para edição
+    if ($editar) {
+        $stmtInsc = $db->prepare("SELECT id FROM inscricoes WHERE estudante_id = :estudante_id ORDER BY id DESC LIMIT 1");
+        $stmtInsc->bindParam(':estudante_id', $editar['id'], PDO::PARAM_INT);
+        $stmtInsc->execute();
+        $inscricaoAssoc = $stmtInsc->fetch(PDO::FETCH_ASSOC);
+
+        $documentosMatricula = [];
+        if ($inscricaoAssoc) {
+            $inscricaoId = $inscricaoAssoc['id'];
+            $inscricaoTemp = new Inscricao($db);
+            $documentosMatricula = $inscricaoTemp->getDocumentos(); // Obtém todos os docs da inscrição
+        }
+    }
 }
 
 // ================================
@@ -401,6 +633,22 @@ $estudantes = $estudante->listar();
                                 <br><a href="../public/<?= htmlspecialchars($docVerso['caminho_arquivo']) ?>" target="_blank">Visualizar Verso</a>
                             <?php endif;
                         endif;
+                     endif; ?>
+                </div>
+            </div>
+
+            <!-- Comprovante de Matrícula -->
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Comprovante de Matrícula *</label> <!-- Adicionado asterisco -->
+                    <input type="file" name="comprovante_matricula" accept=".jpg,.jpeg,.png,.pdf" required> <!-- Adicionado 'required' -->
+                    <?php if ($editar && !empty($documentosMatricula)):
+                        foreach ($documentosMatricula as $doc):
+                            if ($doc['tipo'] === 'matricula'): ?>
+                                <br><small>Arquivo atual (Matrícula): <?= htmlspecialchars($doc['descricao']) ?></small>
+                                <br><a href="../public/<?= htmlspecialchars($doc['caminho_arquivo']) ?>" target="_blank">Visualizar Matrícula</a>
+                            <?php endif;
+                        endforeach;
                      endif; ?>
                 </div>
             </div>

@@ -20,10 +20,12 @@ $erro = '';
 $sucesso = '';
 
 // ================================
-// AÇÕES: Upload de documentos
+// AÇÕES: Upload de documentos (PAGAMENTO SOMENTE)
 // ================================
 
 if ($_POST) {
+    // --- REMOVIDO: Bloco para upload_matricula ---
+    /*
     if (isset($_POST['acao']) && $_POST['acao'] === 'upload_matricula') {
         $inscricaoId = (int)$_POST['inscricao_id'];
         if (!empty($_FILES['comprovante_matricula']['name'])) {
@@ -89,6 +91,7 @@ if ($_POST) {
             $erro = "Selecione um arquivo.";
         }
     }
+    */
 
     if (isset($_POST['acao']) && $_POST['acao'] === 'upload_pagamento') {
         $inscricaoId = (int)$_POST['inscricao_id'];
@@ -148,7 +151,7 @@ if ($_GET) {
         }
     }
 
-    // --- NOVA AÇÃO ---
+    // --- MANTIDO: AÇÃO DE VALIDAR MATRÍCULA MANUALMENTE ---
     if (isset($_GET['validar_matricula_manualmente'])) {
         $inscricaoId = (int)$_GET['validar_matricula_manualmente'];
         $pagina = (int)($_GET['pagina'] ?? 1);
@@ -198,7 +201,7 @@ if ($_GET) {
         header("Location: ?pagina={$pagina}&filtro_situacao=" . urlencode($filtroSituacao) . "&filtro_status_validacao=" . urlencode($filtroStatusValidacao));
         exit; // Importante sair após o redirect
     }
-    // --- FIM NOVA AÇÃO ---
+    // --- FIM MANTIDO ---
 }
 
 // ================================
@@ -349,7 +352,7 @@ $possiveisStatusValidacao = ['pendente', 'dados_aprovados'];
                         <th>Matrícula Validada</th>
                         <th>Pagamento Confirmado</th>
                         <th>Documentos</th>
-                        <th>Anexar Matrícula</th> <!-- Coluna atualizada -->
+                        <!-- REMOVIDO: <th>Anexar Matrícula</th> -->
                         <th>Anexar Pagamento</th>
                         <th>CIE Emitida</th>
                     </tr>
@@ -423,9 +426,7 @@ $possiveisStatusValidacao = ['pendente', 'dados_aprovados'];
                                         case 'pagamento':
                                             $nomeAmigavel = 'Comprovante de Pagamento';
                                             break;
-                                        case 'selfie':
-                                            $nomeAmigavel = 'Selfie com Documento';
-                                            break;
+                                        // REMOVIDO: case 'selfie':
                                         default:
                                             $nomeAmigavel = 'Documento (' . htmlspecialchars($doc['tipo']) . ')';
                                     }
@@ -435,27 +436,7 @@ $possiveisStatusValidacao = ['pendente', 'dados_aprovados'];
                             }
                             ?>
                         </td>
-                        <td class="acoes">
-                            <?php if (in_array($insc['situacao'], ['aguardando_validacao', 'pagamento_pendente', 'dados_aprovados']) && !$temMatricula): ?>
-                                <form method="POST" enctype="multipart/form-data" class="upload-form" style="display:inline;">
-                                    <input type="hidden" name="acao" value="upload_matricula">
-                                    <input type="hidden" name="inscricao_id" value="<?= $insc['id'] ?>">
-                                    <input type="file" name="comprovante_matricula" accept=".jpg,.jpeg,.png,.pdf" style="display:none;" onchange="this.form.submit()" id="mat_<?= $insc['id'] ?>">
-                                    <label for="mat_<?= $insc['id'] ?>" style="cursor:pointer; color:#1976d2;">📎</label>
-                                </form>
-                            <?php elseif ($temMatricula && !$insc['matricula_validada']): ?>
-                                <!-- Botão de Validação Manual -->
-                                <a href="?validar_matricula_manualmente=<?= $insc['id'] ?>&pagina=<?= $pagina ?>&filtro_situacao=<?= urlencode($filtroSituacao) ?>&filtro_status_validacao=<?= urlencode($filtroStatusValidacao) ?>" 
-                                   onclick="return confirm('Validar manualmente o comprovante de matrícula para esta inscrição?')">
-                                    ✅ Validar
-                                </a>
-                                <span title="Já anexado, aguardando validação"> (Aguardando)</span>
-                            <?php elseif ($temMatricula && $insc['matricula_validada']): ?>
-                                <span title="Já anexado e validado">✅ Validado</span>
-                            <?php else: ?>
-                                —
-                            <?php endif; ?>
-                        </td>
+                        <!-- REMOVIDO: Célula da coluna "Anexar Matrícula" -->
                         <td class="acoes">
                             <?php if (in_array($insc['situacao'], ['aguardando_validacao', 'pagamento_pendente', 'dados_aprovados']) && !$temPagamento): ?>
                                 <form method="POST" enctype="multipart/form-data" class="upload-form" style="display:inline;">

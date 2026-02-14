@@ -55,10 +55,6 @@ if ($_POST) {
          $erro = "Tipo de documento de identidade inválido.";
     }
 
-    // Validação da selfie com documento
-    if (empty($_FILES['selfie_documento']['name'])) {
-        $erro = "É obrigatório anexar a selfie segurando o documento.";
-    }
 
 
     if (empty($erro)) {
@@ -133,30 +129,16 @@ if ($_POST) {
                                 // $estudante->id = $estudanteId; $estudante->deletar();
                                 // $inscricao->id = $inscricaoId; $inscricao->deletar();
                             } else {
-                                // Salvar selfie com o documento - OBRIGATÓRIO
-                                // Usar o modelo DocumentoEstudante para salvar a selfie
-                                if (!empty($_FILES['selfie_documento']['name'])) {
-                                    if ($docIdentidadeModel->salvarUnicoArquivo($estudanteId, $_FILES['selfie_documento'], 'selfie_documento')) {
-                                        $sucesso = "Inscrição realizada com sucesso!";
-
-                                        // === LOG: Inscrição realizada por estudante ===
-                                        require_once __DIR__ . '/app/models/Log.php'; // Inclua o modelo Log
-                                        $log = new Log($db);
-                                        $log->registrar(
-                                            null, // ID do usuário (nulo para ação pública)
-                                            'inscricao_publica_realizada',
-                                            "Estudante: {$estudante->nome}, CPF: {$estudante->cpf}, Código Inscrição: {$codigoGerado}",
-                                            $inscricaoId, // ID da inscrição criada
-                                            'inscricoes'
-                                        );
-                                    } else {
-                                        $erro = "Erro ao salvar a selfie com o documento.";
-                                        // Opcional: lidar com falha na selfie (ex: rollback da inscrição?)
-                                    }
-                                } else {
-                                     // Este else não deveria ser atingido devido à validação inicial, mas mantido por segurança
-                                     $erro = "Erro interno: Selfie com documento não fornecida.";
-                                }
+                                require_once __DIR__ . '/app/models/Log.php'; // Inclua o modelo Log
+                                $log = new Log($db);
+                                $log->registrar(
+                                    null, // ID do usuário (nulo para ação pública)
+                                    'inscricao_publica_realizada',
+                                    "Estudante: {$estudante->nome}, CPF: {$estudante->cpf}, Código Inscrição: {$codigoGerado}",
+                                    $inscricaoId, // ID da inscrição criada
+                                    'inscricoes'
+                                );
+                                $sucesso = "Inscrição realizada com sucesso!";
                             }
                         } else {
                             // Este else não deveria ser atingido devido à validação inicial, mas mantido por segurança
@@ -268,14 +250,6 @@ if ($_POST) {
                     </div>
                 </div>
 
-                <!-- Selfie com Documento -->
-                <div class="form-row">
-                    <div class="form-group">
-                        <label>Selfie segurando o Documento *</label>
-                        <input type="file" name="selfie_documento" accept=".jpg,.jpeg,.png" required>
-                        <small>Envie uma foto clara mostrando seu rosto e o documento original.</small>
-                    </div>
-                </div>
 
                 <!-- Dados Acadêmicos -->
                 <h3>Dados Acadêmicos</h3>
