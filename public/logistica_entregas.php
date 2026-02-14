@@ -13,12 +13,17 @@ if (!$auth->isLoggedIn() || !$auth->isAdmin()) {
 require_once __DIR__ . '/../app/models/LogisticaEntrega.php';
 require_once __DIR__ . '/../app/models/Inscricao.php';
 require_once __DIR__ . '/../app/models/Instituicao.php';
+require_once __DIR__ . '/../app/models/Usuario.php'; // Adicionado para carregar usuários
 
 $database = new Database();
 $db = $database->getConnection();
 $logisticaModel = new LogisticaEntrega($db);
 $inscricaoModel = new Inscricao($db);
 $instituicaoModel = new Instituicao($db); // Para carregar nomes de instituições
+$usuarioModel = new Usuario($db); // Para carregar nomes de usuários
+
+// Carregar todos os usuários para o dropdown
+$usuarios = $usuarioModel->listar();
 
 $erro = '';
 $sucesso = '';
@@ -30,7 +35,9 @@ $sucesso = '';
 if ($_POST) {
     if (isset($_POST['acao']) && $_POST['acao'] === 'registrar_saida') {
         $inscricaoId = (int)($_POST['inscricao_id'] ?? 0);
-        if ($inscricaoId > 0) {
+        $responsavelId = (int)($_POST['responsavel_saida_id'] ?? 0); // Novo campo ID
+
+        if ($inscricaoId > 0 && $responsavelId > 0) { // Verifica ID da inscrição e do responsável
             // Obter dados da inscrição e estudante para preencher a logística
             $inscricao = $inscricaoModel->buscarPorId($inscricaoId);
             if ($inscricao) {
@@ -41,12 +48,22 @@ if ($_POST) {
                 $estudante = $stmt->fetch(PDO::FETCH_ASSOC);
 
                 if ($estudante) {
+                    // Buscar nome do usuário responsável pelo ID
+                    $responsavelNome = 'Administrador'; // Padrão caso o usuário não seja encontrado
+                    $usuarioBusca = $usuarioModel->buscarPorId($responsavelId);
+                    if ($usuarioBusca) {
+                        $responsavelNome = $usuarioBusca['nome'];
+                    } else {
+                         $erro = "Erro: Usuário responsável não encontrado."; // Adiciona erro se usuário não for achado
+                         goto render_page; // Sai do bloco if para exibir a página com o erro
+                    }
+
                     $logistica = new LogisticaEntrega($db);
                     $logistica->inscricao_id = $inscricaoId;
                     $logistica->instituicao_id = $estudante['instituicao_id'];
-                    $logistica->responsavel_saida = $_POST['responsavel_saida'] ?? 'Administrador';
+                    $logistica->responsavel_saida = $responsavelNome; // Usa o nome buscado
                     $logistica->observacoes = $_POST['observacoes_saida'] ?? '';
-                    $logistica->registrado_por = $_SESSION['user_id'];
+                    $logistica->registrado_por = $responsavelId; // Salva o ID do usuário selecionado
 
                     if ($logistica->registrarSaida()) {
                         // Opcional: Atualizar status da inscrição novamente para garantir consistência se necessário
@@ -54,9 +71,9 @@ if ($_POST) {
                         require_once __DIR__ . '/../app/models/Log.php';
                         $log = new Log($db);
                         $log->registrar(
-                            $_SESSION['user_id'],
+                            $_SESSION['user_id'], // Quem registrou a ação (usuário logado)
                             'logistica_registro_saida',
-                            "Inscrição ID: {$inscricaoId}, Instituição ID: {$logistica->instituicao_id}",
+                            "Inscrição ID: {$inscricaoId}, Instituição ID: {$logistica->instituicao_id}, Responsável Saída ID: {$responsavelId}",
                             $logistica->id, // ID do registro de logística
                             'logistica_entregas'
                         );
@@ -71,7 +88,7 @@ if ($_POST) {
                 $erro = "Erro: Inscrição não encontrada.";
             }
         } else {
-            $erro = "ID da inscrição inválido.";
+            $erro = "ID da inscrição ou ID do responsável inválido.";
         }
     }
 
@@ -125,6 +142,8 @@ if ($_POST) {
     }
 }
 
+// Rótulo para pular para a renderização da página em caso de erro
+render_page:
 
 // ================================
 // FILTRAGEM E LISTAGEM
@@ -162,71 +181,8 @@ $totalRegistros = $totalStmt->fetch(PDO::FETCH_ASSOC)['total'];
 $totalPaginas = ceil($totalRegistros / $registrosPorPagina);
 
 // Aplicar filtros e paginação na listagem
-$entregasList = $logisticaModel->listarTodas(); // Este método atualmente lista todos, sem paginação nem filtro direto. Vamos ajustar isso.
-// OU BUSCAR APENAS OS IDS DAS INSCRIÇÕES NECESSÁRIAS E DEPOIS USAR OUTRO MÉTODO
-// OU CRIAR UM MÉTODO ESPECÍFICO NO MODELO COM FILTROS E PAGINAÇÃO
-// Vamos optar por criar um método específico com paginação e filtro.
-// Primeiro, atualizamos o modelo:
-
-// Em LogisticaEntrega.php, adicione este método:
-/*
-public function listarComFiltrosEPaginacao($filtroInstituicao = '', $filtroStatus = '', $offset = 0, $limit = 10) {
-    $query = "SELECT le.*, u.nome AS nome_registrador, i.codigo_inscricao AS codigo_inscricao, e.nome AS nome_estudante, inst.nome AS nome_instituicao
-              FROM {$this->table} le
-              LEFT JOIN usuarios u ON le.registrado_por = u.id
-              LEFT JOIN inscricoes i ON le.inscricao_id = i.id
-              LEFT JOIN estudantes e ON i.estudante_id = e.id
-              LEFT JOIN instituicoes inst ON le.instituicao_id = inst.id
-              WHERE 1=1 "; // Condição neutra para facilitar adição de filtros
-
-    $params = [];
-    if ($filtroInstituicao) {
-        $query .= " AND le.instituicao_id = :filtro_instituicao ";
-        $params[':filtro_instituicao'] = $filtroInstituicao;
-    }
-    if ($filtroStatus) {
-        $query .= " AND le.status = :filtro_status ";
-        $params[':filtro_status'] = $filtroStatus;
-    }
-
-    $query .= " ORDER BY le.criado_em DESC LIMIT :limit OFFSET :offset";
-
-    $stmt = $this->conn->prepare($query);
-    $stmt->bindParam(':limit', $limit, PDO::PARAM_INT);
-    $stmt->bindParam(':offset', $offset, PDO::PARAM_INT);
-
-    foreach ($params as $key => $value) {
-        $stmt->bindValue($key, $value);
-    }
-
-    $stmt->execute();
-    return $stmt->fetchAll(PDO::FETCH_ASSOC);
-}
-*/
-
-// Agora, no PHP desta página:
-// $entregasList = $logisticaModel->listarComFiltrosEPaginacao($filtroInstituicao, $filtroStatusLogistica, $offset, $registrosPorPagina);
-
-// PORÉM, PARA SIMPLIFICAR A DEMONSTRAÇÃO, VAMOS FILTRAR APÓS CARREGAR TUDO (menos eficiente para grandes volumes)
-$entregasList = $logisticaModel->listarTodas();
-
-// Aplicar filtros manualmente
-if ($filtroInstituicao) {
-    $entregasList = array_filter($entregasList, function($item) use ($filtroInstituicao) {
-        return $item['instituicao_id'] == $filtroInstituicao;
-    });
-}
-if ($filtroStatusLogistica) {
-    $entregasList = array_filter($entregasList, function($item) use ($filtroStatusLogistica) {
-        return $item['status'] == $filtroStatusLogistica;
-    });
-}
-
-// Paginação manual (menos eficiente)
-$totalRegistros = count($entregasList);
-$totalPaginas = ceil($totalRegistros / $registrosPorPagina);
-$offset = ($pagina - 1) * $registrosPorPagina;
-$entregasList = array_slice($entregasList, $offset, $registrosPorPagina);
+// Usando o novo método no modelo para paginação e filtros eficientes
+$entregasList = $logisticaModel->listarComFiltrosEPaginacao($filtroInstituicao, $filtroStatusLogistica, $offset, $registrosPorPagina);
 
 // Obter todas as instituições para o filtro
 $instituicoes = $instituicaoModel->listar();
@@ -334,7 +290,7 @@ $instituicoes = $instituicaoModel->listar();
                         <td><?= htmlspecialchars($ent['responsavel_saida']) ?></td>
                         <td><?= $ent['data_entrega_instituicao'] ? date('d/m/Y H:i', strtotime($ent['data_entrega_instituicao'])) : '—' ?></td>
                         <td><?= htmlspecialchars($ent['responsavel_entrega']) ?></td>
-                        <td><?= htmlspecialchars($ent['nome_registrador']) ?></td>
+                        <td><?= htmlspecialchars($ent['nome_registrador']) ?></td> <!-- Exibe nome do usuário -->
                         <td class="acoes">
                             <?php if ($ent['status'] === 'saida_para_entrega'): ?>
                                 <!-- Formulário para confirmar entrega -->
@@ -387,7 +343,7 @@ $instituicoes = $instituicaoModel->listar();
         // Carregar inscrições prontas para logística (status = cie_emitida_aguardando_entrega)
         $inscricoesProntas = $inscricaoModel->listarProntasParaLogistica();
         $inscricoesComLogistica = []; // Pegar IDs que já têm registro de logística ativo
-        foreach ($entregasList as $ent) { // Usando a lista filtrada para verificação local
+        foreach ($entregasList as $ent) { // Usando a lista filtrada e paginada para verificação local é menos eficiente, mas funciona para o escopo deste bloco.
             if ($ent['status'] === 'saida_para_entrega') {
                 $inscricoesComLogistica[] = $ent['inscricao_id'];
             }
@@ -411,10 +367,17 @@ $instituicoes = $instituicaoModel->listar();
                         </option>
                     <?php endforeach; ?>
                 </select>
-                <label for="responsavel_saida">Responsável pela Saída:</label>
-                <input type="text" name="responsavel_saida" id="responsavel_saida" placeholder="Nome do responsável" required>
+                <label for="responsavel_saida_id">Responsável pela Saída:</label>
+                <select name="responsavel_saida_id" id="responsavel_saida_id" required>
+                    <option value="">Selecione um usuário...</option>
+                    <?php foreach ($usuarios as $user): ?>
+                        <option value="<?= $user['id'] ?>" <?= ($_POST['responsavel_saida_id'] ?? '') == $user['id'] ? 'selected' : '' ?>>
+                            <?= htmlspecialchars($user['nome']) ?> (<?= htmlspecialchars($user['email']) ?>)
+                        </option>
+                    <?php endforeach; ?>
+                </select>
                 <label for="observacoes_saida">Observações (Opcional):</label>
-                <input type="text" name="observacoes_saida" id="observacoes_saida" placeholder="Detalhes da entrega...">
+                <input type="text" name="observacoes_saida" id="observacoes_saida" placeholder="Detalhes da entrega..." value="<?= htmlspecialchars($_POST['observacoes_saida'] ?? '') ?>">
                 <button type="submit">Registrar Saída</button>
             </form>
         <?php endif; ?>

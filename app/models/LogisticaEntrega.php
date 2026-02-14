@@ -37,7 +37,7 @@ class LogisticaEntrega {
         $this->responsavel_saida = htmlspecialchars(strip_tags(trim($this->responsavel_saida)));
         $this->data_saida = $this->data_saida ?: date('Y-m-d H:i:s'); // Usa a data/hora atual se não for fornecida
         $this->observacoes = htmlspecialchars(strip_tags(trim($this->observacoes)));
-        $this->registrado_por = (int)$this->registrado_por;
+        $this->registrado_por = (int)$this->registrado_por; // Sanitiza o ID do usuário registrado
 
         $stmt->bindParam(':inscricao_id', $this->inscricao_id, PDO::PARAM_INT);
         $stmt->bindParam(':instituicao_id', $this->instituicao_id, PDO::PARAM_INT);
@@ -45,7 +45,7 @@ class LogisticaEntrega {
         $stmt->bindParam(':responsavel_saida', $this->responsavel_saida);
         $stmt->bindParam(':data_saida', $this->data_saida);
         $stmt->bindParam(':observacoes', $this->observacoes);
-        $stmt->bindParam(':registrado_por', $this->registrado_por, PDO::PARAM_INT);
+        $stmt->bindParam(':registrado_por', $this->registrado_por, PDO::PARAM_INT); // Adiciona o bind
 
         return $stmt->execute();
     }
@@ -122,5 +122,40 @@ class LogisticaEntrega {
         $stmt->execute();
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
+
+    // --- NOVO MÉTODO: Listar com filtros e paginação ---
+    public function listarComFiltrosEPaginacao($filtroInstituicao = '', $filtroStatus = '', $offset = 0, $limit = 10) {
+        $query = "SELECT le.*, u.nome AS nome_registrador, i.codigo_inscricao AS codigo_inscricao, e.nome AS nome_estudante, inst.nome AS nome_instituicao
+                  FROM {$this->table} le
+                  LEFT JOIN usuarios u ON le.registrado_por = u.id
+                  LEFT JOIN inscricoes i ON le.inscricao_id = i.id
+                  LEFT JOIN estudantes e ON i.estudante_id = e.id
+                  LEFT JOIN instituicoes inst ON le.instituicao_id = inst.id
+                  WHERE 1=1 "; // Condição neutra para facilitar adição de filtros
+
+        $params = [];
+        if ($filtroInstituicao) {
+            $query .= " AND le.instituicao_id = :filtro_instituicao ";
+            $params[':filtro_instituicao'] = $filtroInstituicao;
+        }
+        if ($filtroStatus) {
+            $query .= " AND le.status = :filtro_status ";
+            $params[':filtro_status'] = $filtroStatus;
+        }
+
+        $query .= " ORDER BY le.criado_em DESC LIMIT :limit OFFSET :offset";
+
+        $stmt = $this->conn->prepare($query);
+        $stmt->bindParam(':limit', $limit, PDO::PARAM_INT);
+        $stmt->bindParam(':offset', $offset, PDO::PARAM_INT);
+
+        foreach ($params as $key => $value) {
+            $stmt->bindValue($key, $value);
+        }
+
+        $stmt->execute();
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+    // --- FIM NOVO MÉTODO ---
 }
 ?>
