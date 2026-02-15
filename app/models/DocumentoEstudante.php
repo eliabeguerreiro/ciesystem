@@ -22,9 +22,10 @@ class DocumentoEstudante {
      * @param array $frente Arquivo da frente ($_FILES['campo_frente'])
      * @param array $verso Arquivo do verso ($_FILES['campo_verso'])
      * @param string $tipo Tipo do documento ('rg', 'cnh', 'passaporte', 'cpf')
+     * @param string $statusValidacaoDoEstudante O status de validação do estudante ('pendente', 'dados_aprovados')
      * @return bool True se ambos forem salvos com sucesso na nova tabela, False caso contrário
      */
-    public function salvarFrenteVerso($estudante_id, $frente, $verso, $tipo) {
+    public function salvarFrenteVerso($estudante_id, $frente, $verso, $tipo, $statusValidacaoDoEstudante = 'pendente') { // Adicionado parâmetro
         // Validação dos arquivos
         if (!$frente || $frente['error'] !== UPLOAD_ERR_OK) {
             return false;
@@ -53,6 +54,11 @@ class DocumentoEstudante {
         $tipoFrente = $tipo . '_frente';
         $tipoVerso = $tipo . '_verso';
 
+        // --- LÓGICA DE VALIDAÇÃO AUTOMÁTICA ---
+        $estadoInicial = ($statusValidacaoDoEstudante === 'dados_aprovados') ? 'validado' : 'pendente';
+        // --- FIM LÓGICA DE VALIDAÇÃO AUTOMÁTICA ---
+
+
         // Salvar arquivo da frente na nova tabela
         $nomeFrente = "doc_{$tipoFrente}_" . uniqid() . '.' . $extFrente;
         $caminhoAbsolutoFrente = __DIR__ . "/../../public/uploads/documentos/{$nomeFrente}"; // Pasta unificada
@@ -73,7 +79,7 @@ class DocumentoEstudante {
         $stmt->bindValue(':tipo', $tipoFrente, PDO::PARAM_STR);
         $stmt->bindValue(':caminho_arquivo', "uploads/documentos/{$nomeFrente}"); // Caminho unificado
         $stmt->bindValue(':descricao', $frente['name']);
-        $stmt->bindValue(':validado', 'pendente', PDO::PARAM_STR); // Estado inicial
+        $stmt->bindValue(':validado', $estadoInicial, PDO::PARAM_STR); // <-- Usar estado determinado
 
         if (!$stmt->execute()) {
             // Se falhar, tentar apagar o arquivo recém-criado
@@ -102,7 +108,7 @@ class DocumentoEstudante {
         $stmt->bindValue(':tipo', $tipoVerso, PDO::PARAM_STR);
         $stmt->bindValue(':caminho_arquivo', "uploads/documentos/{$nomeVerso}"); // Caminho unificado
         $stmt->bindValue(':descricao', $verso['name']);
-        $stmt->bindValue(':validado', 'pendente', PDO::PARAM_STR); // Estado inicial
+        $stmt->bindValue(':validado', $estadoInicial, PDO::PARAM_STR); // <-- Usar estado determinado
 
         if (!$stmt->execute()) {
             // Se falhar ao inserir no BD o verso, apaga os arquivos e tenta apagar o registro da frente
@@ -120,9 +126,10 @@ class DocumentoEstudante {
      * @param int $estudante_id ID do estudante
      * @param array $file Arquivo ($_FILES['campo_do_formulario'])
      * @param string $tipo Tipo do documento ('selfie_documento', etc.) - Deve estar no ENUM da nova tabela.
+     * @param string $statusValidacaoDoEstudante O status de validação do estudante ('pendente', 'dados_aprovados')
      * @return bool True se salvo com sucesso na nova tabela, False caso contrário
      */
-    public function salvarUnicoArquivo($estudante_id, $file, $tipo) {
+    public function salvarUnicoArquivo($estudante_id, $file, $tipo, $statusValidacaoDoEstudante = 'pendente') { // Adicionado parâmetro
         if (!$file || $file['error'] !== UPLOAD_ERR_OK) {
             return false;
         }
@@ -148,6 +155,10 @@ class DocumentoEstudante {
             mkdir(dirname($caminhoAbsoluto), 0777, true);
         }
 
+        // --- LÓGICA DE VALIDAÇÃO AUTOMÁTICA ---
+        $estadoInicial = ($statusValidacaoDoEstudante === 'dados_aprovados') ? 'validado' : 'pendente';
+        // --- FIM LÓGICA DE VALIDAÇÃO AUTOMÁTICA ---
+
         if (move_uploaded_file($file['tmp_name'], $caminhoAbsoluto)) {
             $query = "INSERT INTO {$this->tableNova} (entidade_tipo, entidade_id, tipo, caminho_arquivo, descricao, validado)
                       VALUES (:entidade_tipo, :entidade_id, :tipo, :caminho_arquivo, :descricao, :validado)"; // Adicionado 'validado'
@@ -157,7 +168,7 @@ class DocumentoEstudante {
             $stmt->bindValue(':tipo', $tipo, PDO::PARAM_STR);
             $stmt->bindValue(':caminho_arquivo', "uploads/documentos/{$nome}"); // Caminho unificado
             $stmt->bindValue(':descricao', $file['name']);
-            $stmt->bindValue(':validado', 'pendente', PDO::PARAM_STR); // Estado inicial
+            $stmt->bindValue(':validado', $estadoInicial, PDO::PARAM_STR); // <-- Usar estado determinado
             return $stmt->execute();
         }
         return false;
@@ -173,7 +184,9 @@ class DocumentoEstudante {
     public function buscarPorEstudanteETipo($estudante_id, $tipo) {
         $query = "SELECT * FROM {$this->tableNova} WHERE entidade_tipo = :entidade_tipo AND entidade_id = :entidade_id AND tipo = :tipo ORDER BY criado_em ASC";
         $stmt = $this->conn->prepare($query);
-        $stmt->bindParam(':entidade_tipo', 'estudante', PDO::PARAM_STR); // Fixo para este modelo
+        // --- CORREÇÃO: Usar bindValue para valor literal ---
+        $stmt->bindValue(':entidade_tipo', 'estudante', PDO::PARAM_STR); // Fixo para este modelo
+        // --- FIM CORREÇÃO ---
         $stmt->bindParam(':entidade_id', $estudante_id, PDO::PARAM_INT);
         $stmt->bindParam(':tipo', $tipo, PDO::PARAM_STR);
         try {
@@ -247,10 +260,13 @@ class DocumentoEstudante {
     private function deletarUltimoInseridoNovaTabela($estudante_id, $tipo, $nome_arquivo) {
          $query = "DELETE FROM {$this->tableNova} WHERE entidade_tipo = :entidade_tipo AND entidade_id = :entidade_id AND tipo = :tipo AND caminho_arquivo LIKE :caminho ORDER BY criado_em DESC LIMIT 1";
          $stmt = $this->conn->prepare($query);
-         $stmt->bindParam(':entidade_tipo', 'estudante', PDO::PARAM_STR); // Fixo para este modelo
+         // --- CORREÇÃO: Usar bindValue para valor literal ---
+         $stmt->bindValue(':entidade_tipo', 'estudante', PDO::PARAM_STR); // Fixo para este modelo
+         // --- FIM CORREÇÃO ---
          $stmt->bindParam(':entidade_id', $estudante_id, PDO::PARAM_INT);
          $stmt->bindParam(':tipo', $tipo, PDO::PARAM_STR);
          $stmt->bindValue(':caminho', '%'.$nome_arquivo.'%'); // Pesquisa aproximada pelo nome do arquivo
          return $stmt->execute();
     }
 }
+?>

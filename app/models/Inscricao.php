@@ -12,10 +12,9 @@ class Inscricao {
     public $situacao;
     // *** NOVOS CAMPOS ***
     public $pagamento_confirmado;
-    public $matricula_validada; // <-- Mantido por enquanto para compatibilidade, mas sua lógica de validação mudará
+    public $matricula_validada;
     public $origem; 
-    // *** CAMPO ADICIONAL ***
-    public $documentos; // Novo campo para armazenar JSON de documentos (opcional, dependendo da estratégia)
+
 
 
     public function __construct($db) {
@@ -47,8 +46,6 @@ class Inscricao {
              // throw new Exception("Campo 'origem' deve ser definido antes de criar a inscrição.");
              $this->origem = 'estudante'; // Padrão, mas ideal definir explicitamente
         }
-        // Inicializar o campo documentos como um objeto JSON vazio (opcional)
-        $this->documentos = json_encode([]);
         // *** FIM INICIALIZAR NOVOS CAMPOS ***
         $query = "INSERT INTO {$this->table} (
             estudante_id, codigo_inscricao, data_validade, situacao,
