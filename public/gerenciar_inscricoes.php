@@ -425,42 +425,9 @@ $possiveisStatusValidacao = ['pendente', 'dados_aprovados'];
                             ?>
                         </td>
                         <td>
-                            <?php
-                            if (empty($docs)) {
-                                echo "—";
-                            } else {
-                                foreach ($docs as $doc) {
-                                    // --- ATUALIZADO: Tipos de documentos podem vir da nova estrutura ---
-                                    switch ($doc['tipo'] ?? '') {
-                                        case 'matricula':
-                                            $nomeAmigavel = 'Comprovante de Matrícula';
-                                            break;
-                                        case 'pagamento':
-                                            $nomeAmigavel = 'Comprovante de Pagamento';
-                                            break;
-                                        // Exemplos de novos tipos que podem aparecer
-                                        case 'rg_frente':
-                                            $nomeAmigavel = 'RG (Frente)';
-                                            break;
-                                        case 'rg_verso':
-                                            $nomeAmigavel = 'RG (Verso)';
-                                            break;
-                                        case 'cpf_frente':
-                                            $nomeAmigavel = 'CPF (Frente)';
-                                            break;
-                                        case 'cpf_verso':
-                                            $nomeAmigavel = 'CPF (Verso)';
-                                            break;
-                                        // ... outros tipos
-                                        default:
-                                            $nomeAmigavel = 'Documento (' . htmlspecialchars($doc['tipo']) . ')';
-                                    }
-                                    // --- FIM ATUALIZADO ---
-                                    echo '<div><a href="' . htmlspecialchars($doc['caminho_arquivo']) . '" target="_blank" class="doc-link">'
-                                        . $nomeAmigavel . '</a></div>';
-                                }
-                            }
-                            ?>
+                            <a href="validar_documentos.php?id=<?= $insc['id'] ?>" title="Gerenciar validação dos documentos desta inscrição">
+                                📋 Validar
+                            </a>
                         </td>
                         <!-- REMOVIDO: Célula da coluna "Anexar Matrícula" -->
                         <td class="acoes">

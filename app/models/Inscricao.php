@@ -116,7 +116,7 @@ class Inscricao {
                 $caminhoRelativo = "uploads/documentos/{$nomeUnico}";
 
                 // Usa bindValue para evitar referência entre execuções
-                $stmt->bindValue(':entidade_tipo', 'inscricao', PDO::PARAM_STR); // <-- Novo campo
+                $stmt->bindValue(':entidade_tipo', 'inscricao', PDO::PARAM_STR); // <-- Novo campo - bindValue
                 $stmt->bindValue(':entidade_id', $this->id, PDO::PARAM_INT); // <-- ID da inscrição
                 $stmt->bindValue(':tipo', $tipo, PDO::PARAM_STR);
                 $stmt->bindValue(':caminho_arquivo', $caminhoRelativo);
@@ -149,7 +149,7 @@ class Inscricao {
         // *** MUDANÇA: Query para a nova tabela documentos_anexados ***
         $query = "SELECT * FROM documentos_anexados WHERE entidade_tipo = :entidade_tipo AND entidade_id = :entidade_id ORDER BY tipo, criado_em";
         $stmt = $this->conn->prepare($query);
-        $stmt->bindParam(':entidade_tipo', 'inscricao', PDO::PARAM_STR); // <-- Filtra por inscrição
+        $stmt->bindValue(':entidade_tipo', 'inscricao', PDO::PARAM_STR); 
         $stmt->bindParam(':entidade_id', $this->id, PDO::PARAM_INT);
         try {
             $stmt->execute();
