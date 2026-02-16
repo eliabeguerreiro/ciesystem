@@ -10,19 +10,18 @@ if (!$auth->isLoggedIn() || !$auth->isAdmin()) {
 
 // Carrega dependências
 require_once __DIR__ . '/../app/models/Estudante.php';
-require_once __DIR__ . '/../app/models/Inscricao.php'; // Adicionado modelo Inscricao
+require_once __DIR__ . '/../app/models/Inscricao.php';
 require_once __DIR__ . '/../app/controllers/EstudanteController.php';
-require_once __DIR__ . '/../app/models/DocumentoEstudante.php'; // Novo modelo
+require_once __DIR__ . '/../app/models/DocumentoEstudante.php';
 require_once __DIR__ . '/../app/models/Instituicao.php';
 
 $database = new Database();
 $db = $database->getConnection();
 $estudanteCtrl = new EstudanteController($db);
 $estudante = new Estudante($db);
-$inscricaoModel = new Inscricao($db); // Instância do modelo de inscrição
-$docIdentidadeModel = new DocumentoEstudante($db); // Instância do modelo de doc
-$instituicaoModel = new Instituicao($db); // Instância do modelo de instituição
-
+$inscricaoModel = new Inscricao($db);
+$docIdentidadeModel = new DocumentoEstudante($db); // Instância do modelo de doc (atualizado)
+$instituicaoModel = new Instituicao($db);
 
 $erro = '';
 $sucesso = '';
@@ -39,8 +38,8 @@ if ($_POST) {
     $estudante->documento_tipo = $_POST['documento_tipo'] ?? 'RG';
     $estudante->documento_numero = $_POST['documento_numero'] ?? '';
     $estudante->documento_orgao = $_POST['documento_orgao'] ?? '';
-    $estudante->instituicao_id = $_POST['instituicao_id'] ?? '';
-    $estudante->instituicao = '';
+    $estudante->instituicao_id = (int)($_POST['instituicao_id'] ?? 0); // Sanitiza como inteiro
+    $estudante->instituicao = ''; // Mantido por compatibilidade com o modelo, mas agora é instituicao_id que conta
     $estudante->campus = $_POST['campus'] ?? '';
     $estudante->curso = $_POST['curso'] ?? '';
     $estudante->nivel = $_POST['nivel'] ?? '';
@@ -66,29 +65,24 @@ if ($_POST) {
 
     // Validação para cadastro e edição
     if (!isset($_POST['id'])) { // Cadastro novo
-        // --- VALIDAÇÃO PARA CADASTRO NOVO (mantém obrigatoriedade) ---
         if ($tipoDocIdentidade && (!$docFrente || empty($docFrente['name']) || !$docVerso || empty($docVerso['name']))) {
              $erro = "Para o cadastro com documento de identidade, é necessário anexar ambos os arquivos: Frente e Verso.";
         }
         if ($tipoDocIdentidade && (!empty($docFrente['name']) && !empty($docVerso['name']))) {
-            // Validação do tipo de documento se os arquivos forem enviados
             $tiposValidos = ['rg', 'cnh', 'passaporte', 'cpf'];
             if (!in_array(strtolower($tipoDocIdentidade), $tiposValidos)) {
                  $erro = "Tipo de documento de identidade inválido.";
             }
         }
     } else { // Edição
-         // --- VALIDAÇÃO PARA EDIÇÃO (permite envio opcional) ---
          if ($tipoDocIdentidade && (!empty($docFrente['name']) || !empty($docVerso['name']))) {
-             // Se um novo tipo for selecionado e arquivos forem enviados, valida
              $tiposValidos = ['rg', 'cnh', 'passaporte', 'cpf'];
              if (!in_array(strtolower($tipoDocIdentidade), $tiposValidos)) {
                   $erro = "Tipo de documento de identidade inválido.";
-             } elseif (empty($docFrente['name']) || empty($docVerso['name'])) { // Corrigido: era um ) extra
+             } elseif (empty($docFrente['name']) || empty($docVerso['name'])) {
                   $erro = "Ao enviar documentos de identidade, ambos os arquivos (Frente e Verso) devem ser anexados.";
              }
          }
-         // Se não forem enviados novos arquivos, a validação não é acionada, permitindo a edição sem alterar os documentos.
     }
 
 
@@ -114,7 +108,7 @@ if ($_POST) {
 
                 // --- Processar Documentos de Identidade na Edição ---
                 if ($tipoDocIdentidade && !empty($docFrente['name']) && !empty($docVerso['name'])) {
-                    // Deletar documentos antigos do mesmo tipo (frente e verso)
+                    // Deletar documentos antigos do mesmo tipo (frente e verso) - O modelo DocumentoEstudante.php atualizado lida com isso
                     $docIdentidadeModel->deletarPorEstudanteETipo($estudante->id, $tipoDocIdentidade);
 
                     // Obter o status_validacao atual do estudante para validação automática
@@ -131,9 +125,9 @@ if ($_POST) {
                 }
                 // ---
 
-                // --- NOVO: Processar Comprovante de Matrícula na Edição ---
+                // --- Processar Comprovante de Matrícula na Edição ---
                 if (!empty($_FILES['comprovante_matricula']['name'])) {
-                    // Obter ID da inscrição associada ao estudante
+                    // Obter ID da inscrição associada ao estudante (mais recente)
                     $stmtInsc = $db->prepare("SELECT id FROM inscricoes WHERE estudante_id = :estudante_id ORDER BY id DESC LIMIT 1");
                     $stmtInsc->bindParam(':estudante_id', $estudante->id, PDO::PARAM_INT);
                     $stmtInsc->execute();
@@ -145,7 +139,6 @@ if ($_POST) {
                         $inscricaoTemp->id = $inscricaoId;
                         if ($inscricaoTemp->salvarDocumentos($_FILES['comprovante_matricula'], 'matricula')) {
                              // --- LÓGICA DE VALIDAÇÃO AUTOMÁTICA NA EDIÇÃO ---
-                             // Obter dados da inscrição e do estudante para verificar origem e status
                              $dadosInscricao = $inscricaoTemp->buscarPorId($inscricaoTemp->id);
                              if ($dadosInscricao) {
                                  $estudanteId = $dadosInscricao['estudante_id'];
@@ -156,10 +149,8 @@ if ($_POST) {
                                  $dadosEstudante = $stmtEstudante->fetch(PDO::FETCH_ASSOC);
 
                                  if ($dadosEstudante && $dadosEstudante['status_validacao'] === 'dados_aprovados' && $origemInscricao === 'administrador') {
-                                     // Se o estudante tem status 'dados_aprovados' E a inscrição é do admin, validamos automaticamente
                                      if ($inscricaoTemp->atualizarMatriculaValidada(true)) {
                                          $sucesso = "Comprovante de matrícula anexado e validado automaticamente (origem admin, status aprovado).";
-                                         // === LOG: Matrícula anexada e validada automaticamente (admin) ===
                                          require_once __DIR__ . '/../app/models/Log.php';
                                          $log = new Log($db);
                                          $log->registrar(
@@ -171,11 +162,9 @@ if ($_POST) {
                                          );
                                      } else {
                                          $sucesso = "Comprovante de matrícula anexado, mas falha ao validar automaticamente.";
-                                         // Log de erro pode ser adicionado aqui se necessário
                                      }
                                  } else {
                                      $sucesso = "Comprovante de matrícula anexado. Aguardando validação (status do estudante ou origem não permitem validação automática).";
-                                     // === LOG: Matrícula anexada (aguardando validação) ===
                                      require_once __DIR__ . '/../app/models/Log.php';
                                      $log = new Log($db);
                                      $log->registrar(
@@ -188,7 +177,6 @@ if ($_POST) {
                                  }
                              } else {
                                   $sucesso = "Comprovante de matrícula anexado (falha na busca de dados da inscrição/estudante).";
-                                  // === LOG: Matrícula anexada (falha na busca) ===
                                   require_once __DIR__ . '/../app/models/Log.php';
                                   $log = new Log($db);
                                   $log->registrar(
@@ -207,10 +195,9 @@ if ($_POST) {
                         $erro = "Erro: Não foi encontrada uma inscrição associada para anexar o comprovante de matrícula.";
                     }
                 }
-                // --- FIM NOVO ---
+                // --- FIM Processar Comprovante de Matrícula na Edição ---
 
                 if (empty($erro)) { // Prosseguir com sucesso se não houve erro no upload
-                    // === LOG: Estudante editado ===
                     require_once __DIR__ . '/../app/models/Log.php';
                     $log = new Log($db);
                     $log->registrar(
@@ -237,33 +224,27 @@ if ($_POST) {
                 $novoEstudanteId = $db->lastInsertId();
 
                 // === CRIAR INSCRIÇÃO AUTOMATICAMENTE ===
-                $inscricao = new Inscricao($db); // Nova instância para a inscrição
+                $inscricao = new Inscricao($db);
                 $inscricao->estudante_id = $novoEstudanteId;
-                $inscricao->origem = 'administrador'; // Define a origem como administrador
-                if ($inscricao->criar()) { // Cria a inscrição
-                    $idInscricaoRecemCriada = $db->lastInsertId(); // Obter ID da inscrição recém-criada
+                $inscricao->origem = 'administrador';
+                if ($inscricao->criar()) {
+                    $idInscricaoRecemCriada = $db->lastInsertId();
 
                     // === SALVAR DOCUMENTOS DE IDENTIDADE (Opcional, mas obrigatório se o tipo for selecionado) ===
                     if ($tipoDocIdentidade && $docFrente && $docVerso) {
-                        // Obter o status_validacao atual do estudante para validação automática
-                        // Neste ponto, o status já foi definido como 'dados_aprovados' no formulário ou como padrão
-                        $statusDoNovoEstudante = $estudante->status_validacao; // ou buscar no DB se necessário após criar
+                        $statusDoNovoEstudante = $estudante->status_validacao;
 
                         // Salvar os novos documentos (frente e verso) - O modelo DocumentoEstudante.php atualizado lida com isso
                         // Passar o status_validacao do estudante para validação automática
-                        if (!$docIdentidadeModel->salvarFrenteVerso($novoEstudanteId, $docFrente, $docVerso, $tipoDocIdentidade, $statusDoNovoEstudante)) { // <-- Passa o status
+                        if (!$docIdentidadeModel->salvarFrenteVerso($novoEstudanteId, $docFrente, $docVerso, $tipoDocIdentidade, $statusDoNovoEstudante)) {
                             $erro = "Erro ao salvar os documentos de identidade (Frente e Verso).";
-                            // Opcional: deletar o estudante e a inscrição recém-criados se o upload falhar?
-                            // $estudante->id = $novoEstudanteId; $estudante->deletar();
-                            // $inscricao->id = $idInscricaoRecemCriada; $inscricao->deletar(); // Precisaria do ID da inscrição criada
                         } else {
                              // --- NOVO: Processar Comprovante de Matrícula no Cadastro ---
                              if (!empty($_FILES['comprovante_matricula']['name'])) {
                                  $inscricaoTemp = new Inscricao($db);
-                                 $inscricaoTemp->id = $idInscricaoRecemCriada; // Usar o ID da inscrição recém-criada
+                                 $inscricaoTemp->id = $idInscricaoRecemCriada;
                                  if ($inscricaoTemp->salvarDocumentos($_FILES['comprovante_matricula'], 'matricula')) {
                                       // --- LÓGICA DE VALIDAÇÃO AUTOMÁTICA NO CADASTRO ---
-                                      // Obter dados da inscrição e do estudante para verificar origem e status
                                       $dadosInscricao = $inscricaoTemp->buscarPorId($inscricaoTemp->id);
                                       if ($dadosInscricao) {
                                           $estudanteId = $dadosInscricao['estudante_id'];
@@ -274,10 +255,8 @@ if ($_POST) {
                                           $dadosEstudante = $stmtEstudante->fetch(PDO::FETCH_ASSOC);
 
                                           if ($dadosEstudante && $dadosEstudante['status_validacao'] === 'dados_aprovados' && $origemInscricao === 'administrador') {
-                                              // Se o estudante tem status 'dados_aprovados' E a inscrição é do admin, validamos automaticamente
                                               if ($inscricaoTemp->atualizarMatriculaValidada(true)) {
                                                   $sucesso = "Estudante cadastrado com sucesso! Comprovante de matrícula anexado e validado automaticamente (origem admin, status aprovado).";
-                                                  // === LOG: Matrícula anexada e validada automaticamente (admin) ===
                                                   require_once __DIR__ . '/../app/models/Log.php';
                                                   $log = new Log($db);
                                                   $log->registrar(
@@ -289,11 +268,9 @@ if ($_POST) {
                                                   );
                                               } else {
                                                   $sucesso = "Estudante cadastrado com sucesso! Comprovante de matrícula anexado, mas falha ao validar automaticamente.";
-                                                  // Log de erro pode ser adicionado aqui se necessário
                                               }
                                           } else {
                                               $sucesso = "Estudante cadastrado com sucesso! Comprovante de matrícula anexado. Aguardando validação (status do estudante ou origem não permitem validação automática).";
-                                              // === LOG: Matrícula anexada (aguardando validação) ===
                                               require_once __DIR__ . '/../app/models/Log.php';
                                               $log = new Log($db);
                                               $log->registrar(
@@ -306,7 +283,6 @@ if ($_POST) {
                                           }
                                       } else {
                                            $sucesso = "Estudante cadastrado com sucesso! Comprovante de matrícula anexado (falha na busca de dados da inscrição/estudante).";
-                                           // === LOG: Matrícula anexada (falha na busca) ===
                                            require_once __DIR__ . '/../app/models/Log.php';
                                            $log = new Log($db);
                                            $log->registrar(
@@ -320,12 +296,9 @@ if ($_POST) {
                                       // === FIM LÓGICA DE VALIDAÇÃO AUTOMÁTICA ---
                                  } else {
                                      $erro = "Erro ao salvar o comprovante de matrícula.";
-                                     // Opcional: lidar com falha no upload da matrícula (ex: rollback da inscrição?)
                                  }
                              } else {
-                                  // Se não for enviado tipo e arquivos, é aceitável para cadastro.
                                   $sucesso = "Estudante cadastrado com sucesso!";
-                                  // === LOG: Estudante criado (via admin) - sem docs ===
                                   require_once __DIR__ . '/../app/models/Log.php';
                                   $log = new Log($db);
                                   $log->registrar(
@@ -335,20 +308,17 @@ if ($_POST) {
                                       $novoEstudanteId, // ID do estudante recém-criado
                                       'estudantes'
                                   );
-                                  // === FIM LOG ===
                                   foreach ($_POST as $key => $value) $_POST[$key] = '';
                              }
                              // --- FIM NOVO ---
                         }
                     } else {
                          // Se não for enviado tipo e arquivos, é aceitável para cadastro.
-                         // --- NOVO: Processar Comprovante de Matrícula no Cadastro (sem doc identidade) ---
                          if (!empty($_FILES['comprovante_matricula']['name'])) {
                              $inscricaoTemp = new Inscricao($db);
-                             $inscricaoTemp->id = $idInscricaoRecemCriada; // Usar o ID da inscrição recém-criada
+                             $inscricaoTemp->id = $idInscricaoRecemCriada;
                              if ($inscricaoTemp->salvarDocumentos($_FILES['comprovante_matricula'], 'matricula')) {
                                   // --- LÓGICA DE VALIDAÇÃO AUTOMÁTICA NO CADASTRO ---
-                                  // Obter dados da inscrição e do estudante para verificar origem e status
                                   $dadosInscricao = $inscricaoTemp->buscarPorId($inscricaoTemp->id);
                                   if ($dadosInscricao) {
                                       $estudanteId = $dadosInscricao['estudante_id'];
@@ -359,10 +329,8 @@ if ($_POST) {
                                       $dadosEstudante = $stmtEstudante->fetch(PDO::FETCH_ASSOC);
 
                                       if ($dadosEstudante && $dadosEstudante['status_validacao'] === 'dados_aprovados' && $origemInscricao === 'administrador') {
-                                          // Se o estudante tem status 'dados_aprovados' E a inscrição é do admin, validamos automaticamente
                                           if ($inscricaoTemp->atualizarMatriculaValidada(true)) {
                                               $sucesso = "Estudante cadastrado com sucesso! Comprovante de matrícula anexado e validado automaticamente (origem admin, status aprovado).";
-                                              // === LOG: Matrícula anexada e validada automaticamente (admin) ===
                                               require_once __DIR__ . '/../app/models/Log.php';
                                               $log = new Log($db);
                                               $log->registrar(
@@ -374,11 +342,9 @@ if ($_POST) {
                                               );
                                           } else {
                                               $sucesso = "Estudante cadastrado com sucesso! Comprovante de matrícula anexado, mas falha ao validar automaticamente.";
-                                              // Log de erro pode ser adicionado aqui se necessário
                                           }
                                       } else {
                                           $sucesso = "Estudante cadastrado com sucesso! Comprovante de matrícula anexado. Aguardando validação (status do estudante ou origem não permitem validação automática).";
-                                          // === LOG: Matrícula anexada (aguardando validação) ===
                                           require_once __DIR__ . '/../app/models/Log.php';
                                           $log = new Log($db);
                                           $log->registrar(
@@ -391,7 +357,6 @@ if ($_POST) {
                                       }
                                   } else {
                                        $sucesso = "Estudante cadastrado com sucesso! Comprovante de matrícula anexado (falha na busca de dados da inscrição/estudante).";
-                                       // === LOG: Matrícula anexada (falha na busca) ===
                                        require_once __DIR__ . '/../app/models/Log.php';
                                        $log = new Log($db);
                                        $log->registrar(
@@ -407,9 +372,7 @@ if ($_POST) {
                                  $erro = "Erro ao salvar o comprovante de matrícula.";
                              }
                          } else {
-                              // Se não for enviado tipo e arquivos, é aceitável para cadastro.
                               $sucesso = "Estudante cadastrado com sucesso!";
-                              // === LOG: Estudante criado (via admin) - sem docs ===
                               require_once __DIR__ . '/../app/models/Log.php';
                               $log = new Log($db);
                               $log->registrar(
@@ -419,15 +382,11 @@ if ($_POST) {
                                   $novoEstudanteId, // ID do estudante recém-criado
                                   'estudantes'
                               );
-                              // === FIM LOG ===
                               foreach ($_POST as $key => $value) $_POST[$key] = '';
                          }
-                         // --- FIM NOVO ---
                     }
                 } else {
                     $erro = "Erro ao criar inscrição para o estudante.";
-                    // Opcional: deletar o estudante recém-criado se a inscrição falhar?
-                    // $estudante->id = $novoEstudanteId; $estudante->deletar();
                 }
                 // === FIM CRIAR INSCRIÇÃO AUTOMATICAMENTE ===
             } else {
@@ -451,12 +410,12 @@ if (isset($_GET['deletar'])) {
             $estudanteCtrl->deletarFotoAntiga($registro['foto']);
         }
         // Deleta TODOS os documentos de identidade associados (irá apagar frente e verso de todos os tipos)
+        // O modelo DocumentoEstudante.php atualizado lida com 'documentos_anexados' e encontra a inscrição correta
         $docIdentidadeModel->deletarPorEstudanteETipo($estudante->id, 'rg');
         $docIdentidadeModel->deletarPorEstudanteETipo($estudante->id, 'cnh');
         $docIdentidadeModel->deletarPorEstudanteETipo($estudante->id, 'passaporte');
         $docIdentidadeModel->deletarPorEstudanteETipo($estudante->id, 'cpf');
 
-        // === LOG: Estudante excluído ===
         require_once __DIR__ . '/../app/models/Log.php';
         $log = new Log($db);
         $log->registrar(
@@ -480,11 +439,11 @@ $editar = null;
 if (isset($_GET['editar'])) {
     $editar = $estudante->buscarPorId((int)$_GET['editar']);
     // Carregar documentos de identidade para edição (busca por tipo específico ou todos)
+    // O modelo DocumentoEstudante.php atualizado lida com 'documentos_anexados' e encontra a inscrição mais recente
     $docsRG = $docIdentidadeModel->buscarPorEstudanteETipo($editar['id'], 'rg');
     $docsCNH = $docIdentidadeModel->buscarPorEstudanteETipo($editar['id'], 'cnh');
     $docsPassaporte = $docIdentidadeModel->buscarPorEstudanteETipo($editar['id'], 'passaporte');
     $docsCPF = $docIdentidadeModel->buscarPorEstudanteETipo($editar['id'], 'cpf');
-    // Poderia armazenar em arrays associativos para exibição mais fácil
     $documentosExistentes = [
         'rg' => $docsRG,
         'cnh' => $docsCNH,
@@ -613,14 +572,12 @@ $estudantes = $estudante->listar();
             <div class="form-row">
                 <div class="form-group">
                     <label>Documento de Identidade - Frente</label>
-                    <!-- Removido 'required' para edição -->
                     <input type="file" name="doc_identidade_frente" accept=".jpg,.jpeg,.png,.pdf">
                     <?php if ($editar):
-                        $tipoEdit = $editar['documento_tipo']; // Ou pegar do POST se for erro
+                        $tipoEdit = $editar['documento_tipo'];
                         if (isset($documentosExistentes[strtolower($tipoEdit)]) && count($documentosExistentes[strtolower($tipoEdit)]) > 0):
                             $docsDoTipo = $documentosExistentes[strtolower($tipoEdit)];
                             $docFrente = null;
-                            // Assumindo que o primeiro é a frente e o segundo é o verso (baseado na ordem de inserção)
                             if (isset($docsDoTipo[0])) $docFrente = $docsDoTipo[0];
                             if ($docFrente): ?>
                                 <br><small>Arquivo atual (Frente): <?= htmlspecialchars($docFrente['descricao']) ?></small>
@@ -631,14 +588,13 @@ $estudantes = $estudante->listar();
                 </div>
                 <div class="form-group">
                     <label>Documento de Identidade - Verso</label>
-                    <!-- Removido 'required' para edição -->
                     <input type="file" name="doc_identidade_verso" accept=".jpg,.jpeg,.png,.pdf">
                     <?php if ($editar):
-                        $tipoEdit = $editar['documento_tipo']; // Ou pegar do POST se for erro
+                        $tipoEdit = $editar['documento_tipo'];
                         if (isset($documentosExistentes[strtolower($tipoEdit)]) && count($documentosExistentes[strtolower($tipoEdit)]) > 0):
                             $docsDoTipo = $documentosExistentes[strtolower($tipoEdit)];
                             $docVerso = null;
-                            if (isset($docsDoTipo[1])) $docVerso = $docsDoTipo[1]; // Assume o segundo como verso
+                            if (isset($docsDoTipo[1])) $docVerso = $docsDoTipo[1];
                             if ($docVerso): ?>
                                 <br><small>Arquivo atual (Verso): <?= htmlspecialchars($docVerso['descricao']) ?></small>
                                 <br><a href="../public/<?= htmlspecialchars($docVerso['caminho_arquivo']) ?>" target="_blank">Visualizar Verso</a>
@@ -651,8 +607,8 @@ $estudantes = $estudante->listar();
             <!-- Comprovante de Matrícula -->
             <div class="form-row">
                 <div class="form-group">
-                    <label>Comprovante de Matrícula *</label> <!-- Adicionado asterisco -->
-                    <input type="file" name="comprovante_matricula" accept=".jpg,.jpeg,.png,.pdf"> <!-- Removido 'required' -->
+                    <label>Comprovante de Matrícula *</label>
+                    <input type="file" name="comprovante_matricula" accept=".jpg,.jpeg,.png,.pdf">
                     <?php if ($editar && !empty($documentosMatricula)):
                         foreach ($documentosMatricula as $doc):
                             if ($doc['tipo'] === 'matricula'): ?>
@@ -673,11 +629,10 @@ $estudantes = $estudante->listar();
             <div class="form-row">
                 <div class="form-group">
                     <label>Instituição *</label>
-                    <!-- Substituído o campo de texto por um dropdown -->
                     <select name="instituicao_id" required>
                         <option value="">Selecione uma instituição...</option>
                         <?php
-                        $instituicoesAtivas = $instituicaoModel->listarAtivas();
+                        $instituicoesAtivas = $instituicoesAtivas ?? $instituicaoModel->listarAtivas();
                         foreach ($instituicoesAtivas as $inst): ?>
                             <option value="<?= $inst['id'] ?>" <?= ($editar && $editar['instituicao_id'] == $inst['id']) ? 'selected' : '' ?>>
                                 <?= htmlspecialchars($inst['nome']) ?>
@@ -715,7 +670,7 @@ $estudantes = $estudante->listar();
                 </div>
             </div>
 
-            <!-- Status de Validação (oculto no cadastro, pois é automático) -->
+            <!-- Status de Validação -->
             <?php if ($editar): ?>
                 <div class="form-row">
                     <div class="form-group">
@@ -727,7 +682,6 @@ $estudantes = $estudante->listar();
                     </div>
                 </div>
             <?php else: ?>
-                <!-- No cadastro manual, já inicia como aprovado -->
                 <input type="hidden" name="status_validacao" value="dados_aprovados">
             <?php endif; ?>
 
@@ -778,7 +732,7 @@ $estudantes = $estudante->listar();
                     <td><?= htmlspecialchars($e['nome']) ?></td>
                     <td><?= htmlspecialchars($e['matricula']) ?></td>
                     <td><?= htmlspecialchars($e['curso']) ?></td>
-                    <td><?= htmlspecialchars($e['instituicao_nome'] ?? 'N/A') ?></td> <!-- Mostra o nome da instituição ou N/A -->
+                    <td><?= htmlspecialchars($e['instituicao_nome'] ?? 'N/A') ?></td>
                     <td><?= htmlspecialchars($e['situacao_academica']) ?></td>
                     <td><?= htmlspecialchars($e['status_validacao']) ?></td>
                     <td class="acoes">

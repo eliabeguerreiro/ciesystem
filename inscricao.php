@@ -26,7 +26,7 @@ $codigoGerado = '';
 if ($_POST) {
     // Valida campos obrigatórios
     $camposObrigatorios = ['nome', 'data_nascimento', 'cpf', 'documento_tipo', 'documento_numero',
-                          'instituicao_id', 'curso', 'nivel', 'matricula']; // <- Mudança: instituicao_id
+                          'instituicao_id', 'curso', 'nivel', 'matricula'];
     foreach ($camposObrigatorios as $campo) {
         if (empty($_POST[$campo])) {
             $erro = "O campo '$campo' é obrigatório.";
@@ -55,8 +55,6 @@ if ($_POST) {
          $erro = "Tipo de documento de identidade inválido.";
     }
 
-
-
     if (empty($erro)) {
         // Verifica se CPF ou matrícula já existem
         $stmt = $db->prepare("SELECT id FROM estudantes WHERE cpf = ? OR matricula = ?");
@@ -83,9 +81,7 @@ if ($_POST) {
                 $estudante->documento_tipo = $_POST['documento_tipo'];
                 $estudante->documento_numero = $_POST['documento_numero'];
                 $estudante->documento_orgao = $_POST['documento_orgao'] ?? '';
-                // --- MUDANÇA AQUI ---
                 $estudante->instituicao_id = (int)($_POST['instituicao_id'] ?? 0); // Sanitiza como inteiro
-                // --- FIM MUDANÇA ---
                 $estudante->campus = $_POST['campus'] ?? '';
                 $estudante->curso = $_POST['curso'];
                 $estudante->nivel = $_POST['nivel'];
@@ -114,6 +110,21 @@ if ($_POST) {
                         $inscricaoId = $resultado['id'];
                         $codigoGerado = $resultado['codigo_inscricao'];
 
+                        // --- NOVO: Salvar Foto 3x4 como documento anexado à inscrição ---
+                        if ($fotoCaminho) {
+                            // Usar o modelo DocumentoEstudante para salvar a foto na inscrição
+                            if (!$docIdentidadeModel->salvarUnicoArquivo($estudanteId, [
+                                'name' => 'Foto 3x4 - ' . $_POST['nome'] . '.jpg',
+                                'type' => 'image/jpeg',
+                                'tmp_name' => $fotoCaminho,
+                                'error' => UPLOAD_ERR_OK,
+                                'size' => filesize(__DIR__ . '/public/' . $fotoCaminho)
+                            ], 'foto_3x4', 'pendente')) {
+                                $erro = "Erro ao salvar a foto 3x4 como documento anexado à inscrição.";
+                            }
+                        }
+                        // --- FIM NOVO ---
+
                         // Salvar comprovante de matrícula
                         if (!empty($_FILES['comprovante_matricula']['name'])) {
                             $inscTemp = new Inscricao($db);
@@ -123,11 +134,8 @@ if ($_POST) {
 
                         // Salvar documentos de identidade (frente e verso) - OBRIGATÓRIO
                         if ($tipoDocIdentidade && $docFrente && $docVerso) {
-                            if (!$docIdentidadeModel->salvarFrenteVerso($estudanteId, $docFrente, $docVerso, $tipoDocIdentidade)) {
+                            if (!$docIdentidadeModel->salvarFrenteVerso($estudanteId, $docFrente, $docVerso, $tipoDocIdentidade, 'pendente')) {
                                 $erro = "Erro ao salvar os documentos de identidade (Frente e Verso).";
-                                // Opcional: deletar o estudante e a inscrição recém-criados se o upload falhar?
-                                // $estudante->id = $estudanteId; $estudante->deletar();
-                                // $inscricao->id = $inscricaoId; $inscricao->deletar();
                             } else {
                                 require_once __DIR__ . '/app/models/Log.php'; // Inclua o modelo Log
                                 $log = new Log($db);
@@ -141,7 +149,6 @@ if ($_POST) {
                                 $sucesso = "Inscrição realizada com sucesso!";
                             }
                         } else {
-                            // Este else não deveria ser atingido devido à validação inicial, mas mantido por segurança
                             $erro = "Erro interno: Documentos de identidade não fornecidos.";
                         }
 
@@ -256,7 +263,6 @@ if ($_POST) {
                 <div class="form-row">
                     <div class="form-group">
                         <label>Instituição *</label>
-                        <!-- Substituído o campo de texto por um dropdown -->
                         <select name="instituicao_id" required>
                             <option value="">Selecione sua instituição...</option>
                             <?php

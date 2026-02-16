@@ -46,37 +46,14 @@ if ($_POST && $inscricaoId) {
     } else {
         $estudanteId = $inscricao['estudante_id'];
 
-        // Carregar dados do estudante
+        // Carregar dados do estudante (para exibição)
         $estudante = $estudanteModel->buscarPorId($estudanteId);
-        $fotoEstudante = $estudante['foto'] ?? null;
 
-        // Obter documentos da inscrição
-        $docsInscricao = $inscricaoModel->getDocumentos();
+        // Obter documentos da inscrição (entidade_tipo = 'inscricao')
+        $docsInscricao = $inscricaoModel->getDocumentos(); // Retorna documentos com entidade_tipo = 'inscricao' e entidade_id = $inscricaoId
 
-        // Obter documentos do estudante (consulta manual)
-        $queryEstudanteDocs = "SELECT * FROM documentos_anexados WHERE entidade_tipo = 'estudante' AND entidade_id = :estudante_id ORDER BY tipo, criado_em";
-        $stmtEstudanteDocs = $db->prepare($queryEstudanteDocs);
-        $stmtEstudanteDocs->bindParam(':estudante_id', $estudanteId, PDO::PARAM_INT);
-        $stmtEstudanteDocs->execute();
-        $docsEstudante = $stmtEstudanteDocs->fetchAll(PDO::FETCH_ASSOC);
-
-        // --- NOVA LÓGICA: Criar lista de todos os documentos ---
-        $todosDocumentos = array_merge($docsInscricao, $docsEstudante);
-
-        // Adicionar Foto como item especial (apenas para visualização)
-        if ($fotoEstudante) {
-            $todosDocumentos[] = [
-                'id' => 'foto_' . $estudanteId,
-                'entidade_tipo' => 'estudante',
-                'entidade_id' => $estudanteId,
-                'tipo' => 'foto_3x4',
-                'caminho_arquivo' => $fotoEstudante,
-                'descricao' => 'Foto 3x4',
-                'validado' => 'n/a',
-                'observacoes_validacao' => null
-            ];
-        }
-        // --- FIM NOVA LÓGICA ---
+        // --- LÓGICA ATUALIZADA: Carregar documentos ---
+        $todosDocumentos = $docsInscricao;
 
         if (empty($todosDocumentos)) {
             $erro = "Nenhum documento encontrado para esta inscrição.";
@@ -89,56 +66,43 @@ if ($_POST && $inscricaoId) {
                 $tipo = $doc['tipo'];
                 $descricao = $doc['descricao'];
 
-                // Verifica se o documento (ou ID especial da foto) está na lista de reenvio
+                // Verifica se o documento está na lista de reenvio
                 $deveReenviar = in_array($docId, $documentosParaReenvio);
 
                 if ($deveReenviar) {
-                    // Se for a foto, apenas registra a ação (não atualiza banco)
-                    if ($tipo === 'foto_3x4') {
-                        $sucesso .= "Foto 3x4 marcada para reenvio (verifique manualmente).<br>";
-                    } else {
-                        // Documento anexado comum
-                        $novoStatus = 'invalido';
-                        $observacao = $observacaoGeral ?: "Reenvio solicitado.";
-                        $sucesso .= "Documento '{$descricao}' ({$tipo}) marcado para reenvio.<br>";
+                    // Documento anexado comum
+                    $novoStatus = 'invalido';
+                    $observacao = $observacaoGeral ?: "Reenvio solicitado.";
+                    $sucesso .= "Documento '{$descricao}' ({$tipo}) marcado para reenvio.<br>";
 
-                        // Atualizar o status e observação no banco
-                        $queryUpdate = "UPDATE documentos_anexados SET validado = :validado, observacoes_validacao = :observacao WHERE id = :id";
-                        $stmtUpdate = $db->prepare($queryUpdate);
-                        $stmtUpdate->bindParam(':validado', $novoStatus);
-                        $stmtUpdate->bindParam(':observacao', $observacao);
-                        $stmtUpdate->bindParam(':id', $docId, PDO::PARAM_INT);
-                        $stmtUpdate->execute();
-                    }
+                    // Atualizar o status e observação no banco
+                    $queryUpdate = "UPDATE documentos_anexados SET validado = :validado, observacoes_validacao = :observacao WHERE id = :id";
+                    $stmtUpdate = $db->prepare($queryUpdate);
+                    $stmtUpdate->bindParam(':validado', $novoStatus);
+                    $stmtUpdate->bindParam(':observacao', $observacao);
+                    $stmtUpdate->bindParam(':id', $docId, PDO::PARAM_INT);
+                    $stmtUpdate->execute();
                 } else {
-                    // Se não for marcado para reenvio, valida (exceto para foto)
-                    if ($tipo !== 'foto_3x4') {
-                        $novoStatus = 'validado';
-                        $observacao = $observacaoGeral ?: "Validado pelo administrador.";
-                        $sucesso .= "Documento '{$descricao}' ({$tipo}) validado.<br>";
+                    // Se não for marcado para reenvio, valida
+                    $novoStatus = 'validado';
+                    $observacao = $observacaoGeral ?: "Validado pelo administrador.";
+                    $sucesso .= "Documento '{$descricao}' ({$tipo}) validado.<br>";
 
-                        // Atualizar o status e observação no banco
-                        $queryUpdate = "UPDATE documentos_anexados SET validado = :validado, observacoes_validacao = :observacao WHERE id = :id";
-                        $stmtUpdate = $db->prepare($queryUpdate);
-                        $stmtUpdate->bindParam(':validado', $novoStatus);
-                        $stmtUpdate->bindParam(':observacao', $observacao);
-                        $stmtUpdate->bindParam(':id', $docId, PDO::PARAM_INT);
-                        $stmtUpdate->execute();
-                    }
+                    // Atualizar o status e observação no banco
+                    $queryUpdate = "UPDATE documentos_anexados SET validado = :validado, observacoes_validacao = :observacao WHERE id = :id";
+                    $stmtUpdate = $db->prepare($queryUpdate);
+                    $stmtUpdate->bindParam(':validado', $novoStatus);
+                    $stmtUpdate->bindParam(':observacao', $observacao);
+                    $stmtUpdate->bindParam(':id', $docId, PDO::PARAM_INT);
+                    $stmtUpdate->execute();
                 }
             }
 
-            // Verificar se nenhum documento *comum* foi marcado para reenvio
-            $nenhumDocumentoComumMarcado = true;
-            foreach ($todosDocumentos as $doc) {
-                if ($doc['tipo'] !== 'foto_3x4' && in_array($doc['id'], $documentosParaReenvio)) {
-                    $nenhumDocumentoComumMarcado = false;
-                    break;
-                }
-            }
+            // Verificar se nenhum documento foi marcado para reenvio
+            $nenhumDocumentoMarcado = empty($documentosParaReenvio);
 
-            // Se nenhum documento comum foi marcado, atualizar o status da inscrição
-            if ($nenhumDocumentoComumMarcado) {
+            // Se nenhum documento foi marcado, atualizar o status da inscrição
+            if ($nenhumDocumentoMarcado) {
                 if ($inscricaoModel->atualizarMatriculaValidada(true)) {
                     $sucesso .= "Status da inscrição atualizado para 'documentos validados'.";
                     // Registrar log
@@ -146,7 +110,7 @@ if ($_POST && $inscricaoId) {
                     $log->registrar(
                         $_SESSION['user_id'],
                         'validacao_documentos_concluida',
-                        "Inscrição ID: {$inscricaoId}, Todos os documentos (exceto foto) validados.",
+                        "Inscrição ID: {$inscricaoId}, Todos os documentos validados.",
                         $inscricaoId,
                         'inscricoes'
                     );
@@ -169,47 +133,19 @@ if ($_POST && $inscricaoId) {
     }
 }
 
-// ================================
-// CARREGAR DADOS PARA EXIBIÇÃO
-// ================================
 $documentos = [];
-$fotoEstudante = null;
+$fotoEstudante = null; // Foto antiga, se necessário
 
 if ($inscricaoId) {
     $inscricao = $inscricaoModel->buscarPorId($inscricaoId);
     if ($inscricao) {
         $estudanteId = $inscricao['estudante_id'];
 
-        // Carregar dados do estudante
         $estudante = $estudanteModel->buscarPorId($estudanteId);
-        $fotoEstudante = $estudante['foto'] ?? null;
 
-        // Obter documentos da inscrição
-        $docsInscricao = $inscricaoModel->getDocumentos();
+        $inscricaoModel->id = $inscricaoId; // Garante que o ID está definido no modelo
+        $documentos = $inscricaoModel->getDocumentos(); // Retorna documentos com entidade_tipo = 'inscricao' e entidade_id = $inscricaoId
 
-        // Obter documentos do estudante
-        $queryEstudanteDocs = "SELECT * FROM documentos_anexados WHERE entidade_tipo = 'estudante' AND entidade_id = :estudante_id ORDER BY tipo, criado_em";
-        $stmtEstudanteDocs = $db->prepare($queryEstudanteDocs);
-        $stmtEstudanteDocs->bindParam(':estudante_id', $estudanteId, PDO::PARAM_INT);
-        $stmtEstudanteDocs->execute();
-        $docsEstudante = $stmtEstudanteDocs->fetchAll(PDO::FETCH_ASSOC);
-
-        // Combina documentos
-        $documentos = array_merge($docsInscricao, $docsEstudante);
-
-        // Adiciona Foto como item especial
-        if ($fotoEstudante) {
-            $documentos[] = [
-                'id' => 'foto_' . $estudanteId,
-                'entidade_tipo' => 'estudante',
-                'entidade_id' => $estudanteId,
-                'tipo' => 'foto_3x4',
-                'caminho_arquivo' => $fotoEstudante,
-                'descricao' => 'Foto 3x4',
-                'validado' => 'n/a',
-                'observacoes_validacao' => null
-            ];
-        }
     }
 }
 ?>
@@ -243,6 +179,7 @@ if ($inscricaoId) {
         .btn-cancelar { background-color: #555; color: white; border: none; cursor: pointer; }
         .btn-cancelar:hover { background-color: #333; }
         .status-n_a { color: #555; font-style: italic; }
+        .foto-preview { width: 60px; height: 60px; object-fit: cover; border: 1px solid #ddd; border-radius: 4px; }
     </style>
 </head>
 <body>
@@ -276,7 +213,12 @@ if ($inscricaoId) {
                     <tbody>
                         <?php foreach ($documentos as $doc): ?>
                         <tr>
-                            <td><?= htmlspecialchars($doc['descricao']) ?></td>
+                            <td>
+                                <?php if ($doc['tipo'] === 'foto_3x4'): ?>
+                                    <img src="../public/<?= htmlspecialchars($doc['caminho_arquivo']) ?>" class="foto-preview" alt="Foto 3x4">
+                                <?php endif; ?>
+                                <?= htmlspecialchars($doc['descricao']) ?>
+                            </td>
                             <td><?= htmlspecialchars(ucfirst(str_replace('_', ' ', $doc['tipo']))) ?></td>
                             <td>
                                 <span class="status-<?= $doc['validado'] ?? 'n_a' ?>">
@@ -284,11 +226,7 @@ if ($inscricaoId) {
                                 </span>
                             </td>
                             <td>
-                                <?php if ($doc['tipo'] === 'foto_3x4'): ?>
-                                    <a href="../public/<?= htmlspecialchars($doc['caminho_arquivo']) ?>" target="_blank" class="doc-link">Ver</a>
-                                <?php else: ?>
-                                    <a href="../public/<?= htmlspecialchars($doc['caminho_arquivo']) ?>" target="_blank" class="doc-link">Ver</a>
-                                <?php endif; ?>
+                                <a href="../public/<?= htmlspecialchars($doc['caminho_arquivo']) ?>" target="_blank" class="doc-link">Ver</a>
                             </td>
                             <td class="checkbox-container">
                                 <input type="checkbox" name="reenviar[]" value="<?= htmlspecialchars($doc['id']) ?>" id="reenviar_<?= htmlspecialchars($doc['id']) ?>">

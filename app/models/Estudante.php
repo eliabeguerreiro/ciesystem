@@ -37,11 +37,11 @@ class Estudante {
         // Atualizado para usar 'instituicao_id' em vez de 'instituicao'
         $query = "INSERT INTO {$this->table} (
             nome, data_nascimento, cpf, documento_tipo, documento_numero, documento_orgao, foto,
-            instituicao, instituicao_id, campus, curso, nivel, matricula, situacao_academica, status_validacao,
+            instituicao_id, campus, curso, nivel, matricula, situacao_academica, status_validacao,
             email, telefone
         ) VALUES (
             :nome, :data_nascimento, :cpf, :documento_tipo, :documento_numero, :documento_orgao, :foto,
-            :instituicao, :instituicao_id, :campus, :curso, :nivel, :matricula, :situacao_academica, :status_validacao,
+            :instituicao_id, :campus, :curso, :nivel, :matricula, :situacao_academica, :status_validacao,
             :email, :telefone
         )";
         // --- FIM MUDANÇA ---
@@ -54,7 +54,6 @@ class Estudante {
         $this->documento_orgao = htmlspecialchars(strip_tags(trim($this->documento_orgao)));
         // --- MUDANÇA AQUI ---
         // Preenchendo instituicao com valor padrão vazio (compatibilidade com banco de dados)
-        $this->instituicao = '';
         $this->instituicao_id = (int)$this->instituicao_id; // Sanitiza como inteiro
         // --- FIM MUDANÇA ---
         $this->campus = htmlspecialchars(strip_tags(trim($this->campus)));
@@ -75,7 +74,7 @@ class Estudante {
         $stmt->bindParam(':foto', $this->foto);
         // --- MUDANÇA AQUI ---
         // Adicionado bindParam para :instituicao (valor padrão vazio)
-        $stmt->bindParam(':instituicao', $this->instituicao);
+
         $stmt->bindParam(':instituicao_id', $this->instituicao_id, PDO::PARAM_INT); // <- Adicionado bindParam para :instituicao_id
         // --- FIM MUDANÇA ---
         $stmt->bindParam(':campus', $this->campus);
@@ -124,8 +123,7 @@ class Estudante {
             documento_numero = :documento_numero,
             documento_orgao = :documento_orgao,
             foto = :foto,
-            instituicao = :instituicao,
-            instituicao_id = :instituicao_id, -- <- Atualização do novo campo
+            instituicao_id = :instituicao_id,
             campus = :campus,
             curso = :curso,
             nivel = :nivel,
@@ -144,11 +142,7 @@ class Estudante {
         $this->cpf = preg_replace('/[^0-9]/', '', $this->cpf);
         $this->documento_numero = htmlspecialchars(strip_tags(trim($this->documento_numero)));
         $this->documento_orgao = htmlspecialchars(strip_tags(trim($this->documento_orgao)));
-        // --- MUDANÇA AQUI ---
-        // Preenchendo instituicao com valor padrão vazio (compatibilidade com banco de dados)
-        $this->instituicao = '';
         $this->instituicao_id = (int)$this->instituicao_id; // Sanitiza como inteiro
-        // --- FIM MUDANÇA ---
         $this->campus = htmlspecialchars(strip_tags(trim($this->campus)));
         $this->curso = htmlspecialchars(strip_tags(trim($this->curso)));
         $this->nivel = htmlspecialchars(strip_tags(trim($this->nivel)));
@@ -164,11 +158,7 @@ class Estudante {
         $stmt->bindParam(':documento_numero', $this->documento_numero);
         $stmt->bindParam(':documento_orgao', $this->documento_orgao);
         $stmt->bindParam(':foto', $this->foto);
-        // --- MUDANÇA AQUI ---
-        // Adicionado bindParam para :instituicao (valor padrão vazio)
-        $stmt->bindParam(':instituicao', $this->instituicao);
         $stmt->bindParam(':instituicao_id', $this->instituicao_id, PDO::PARAM_INT);
-        // --- FIM MUDANÇA ---
         $stmt->bindParam(':campus', $this->campus);
         $stmt->bindParam(':curso', $this->curso);
         $stmt->bindParam(':nivel', $this->nivel);

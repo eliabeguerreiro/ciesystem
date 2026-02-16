@@ -24,75 +24,6 @@ $sucesso = '';
 // ================================
 
 if ($_POST) {
-    // --- REMOVIDO: Bloco para upload_matricula ---
-    /*
-    if (isset($_POST['acao']) && $_POST['acao'] === 'upload_matricula') {
-        $inscricaoId = (int)$_POST['inscricao_id'];
-        if (!empty($_FILES['comprovante_matricula']['name'])) {
-            $inscTemp = new Inscricao($db);
-            $inscTemp->id = $inscricaoId;
-            if ($inscTemp->salvarDocumentos($_FILES['comprovante_matricula'], 'matricula')) {
-                // Após anexar a matrícula, verificamos se o estudante tem status_validacao = 'dados_aprovados'
-                // Se sim, validamos automaticamente a matrícula.
-                $inscTemp->id = $inscricaoId;
-                $inscDados = $inscTemp->buscarPorId($inscricaoId);
-                if ($inscDados) {
-                    $estudanteId = $inscDados['estudante_id'];
-                    $queryEstudante = "SELECT status_validacao FROM estudantes WHERE id = :estudante_id";
-                    $stmtEstudante = $db->prepare($queryEstudante);
-                    $stmtEstudante->bindParam(':estudante_id', $estudanteId, PDO::PARAM_INT);
-                    $stmtEstudante->execute();
-                    $dadosEstudante = $stmtEstudante->fetch(PDO::FETCH_ASSOC);
-
-                    if ($dadosEstudante && $dadosEstudante['status_validacao'] === 'dados_aprovados') {
-                        $inscTemp->atualizarMatriculaValidada(true); // Valida automaticamente
-                        
-                        // === LOG: Matrícula anexada e validada automaticamente ===
-                        $log = new Log($db);
-                        $log->registrar(
-                            $_SESSION['user_id'],
-                            'anexou_e_validou_comprovante_matricula',
-                            "Inscrição ID: {$inscricaoId}, Estudante ID: {$estudanteId}",
-                            $inscricaoId,
-                            'inscricoes'
-                        );
-                        
-                        $sucesso = "Comprovante de matrícula anexado e validado automaticamente.";
-                    } else {
-                        // === LOG: Matrícula anexada (aguardando validação) ===
-                        $log = new Log($db);
-                        $log->registrar(
-                            $_SESSION['user_id'],
-                            'anexou_comprovante_matricula',
-                            "Inscrição ID: {$inscricaoId}, Estudante ID: {$estudanteId}",
-                            $inscricaoId,
-                            'inscricoes'
-                        );
-                        
-                        $sucesso = "Comprovante de matrícula anexado. Validação pendente.";
-                    }
-                } else {
-                    // === LOG: Matrícula anexada (falha na busca do estudante) ===
-                    $log = new Log($db);
-                    $log->registrar(
-                        $_SESSION['user_id'],
-                        'anexou_comprovante_matricula',
-                        "Inscrição ID: {$inscricaoId} (Erro: dados do estudante não encontrados)",
-                        $inscricaoId,
-                        'inscricoes'
-                    );
-                    
-                    $sucesso = "Comprovante de matrícula anexado.";
-                }
-            } else {
-                $erro = "Erro ao anexar comprovante de matrícula.";
-            }
-        } else {
-            $erro = "Selecione um arquivo.";
-        }
-    }
-    */
-
     if (isset($_POST['acao']) && $_POST['acao'] === 'upload_pagamento') {
         $inscricaoId = (int)$_POST['inscricao_id'];
         if (!empty($_FILES['comprovante_pagamento']['name'])) {
@@ -152,6 +83,9 @@ if ($_GET) {
     }
 
     // --- MANTIDO: AÇÃO DE VALIDAR MATRÍCULA MANUALMENTE ---
+    // Nota: Com a nova estrutura, esta ação pode se tornar redundante,
+    // pois a validação agora é feita em massa na página validar_documentos.php.
+    // Podemos mantê-la por enquanto ou removê-la.
     if (isset($_GET['validar_matricula_manualmente'])) {
         $inscricaoId = (int)$_GET['validar_matricula_manualmente'];
         $pagina = (int)($_GET['pagina'] ?? 1);
@@ -166,7 +100,6 @@ if ($_GET) {
             $estudanteId = $dadosInscricao['estudante_id'];
 
             // Verificar se o comprovante de matrícula foi anexado
-            // --- ATUALIZADO: Agora busca da nova tabela documentos_anexados ---
             $docs = $inscTemp->getDocumentos(); // O modelo Inscricao.php atualizado já faz isso
             $temMatricula = false;
             foreach ($docs as $doc) {
@@ -175,7 +108,6 @@ if ($_GET) {
                     break;
                 }
             }
-            // --- FIM ATUALIZADO ---
 
             if ($temMatricula && !$dadosInscricao['matricula_validada']) { // Só prosseguir se anexado e ainda não validado
                 if ($inscTemp->atualizarMatriculaValidada(true)) {
@@ -239,9 +171,7 @@ $totalPaginas = ceil($totalRegistros / $registrosPorPagina);
 $inscricoesList = $inscricao->listarComEstudantesFiltrada($filtroSituacao, $filtroStatusValidacao, $offset, $registrosPorPagina);
 
 // Obter todos os status possíveis para o filtro (opcional, para o frontend)
-// --- MUDANÇA AQUI ---
 $possiveisSituacoes = ['aguardando_validacao', 'dados_aprovados', 'pagamento_pendente', 'documentos_anexados', 'pago', 'cie_emitida_aguardando_entrega', 'cie_entregue_na_instituicao'];
-// --- FIM MUDANÇA ---
 $possiveisStatusValidacao = ['pendente', 'dados_aprovados'];
 ?>
 
@@ -353,8 +283,7 @@ $possiveisStatusValidacao = ['pendente', 'dados_aprovados'];
                         <th>Pagamento Anexado</th>
                         <th>Documentos Validados</th> <!-- Renomeada coluna -->
                         <th>Pagamento Confirmado</th>
-                        <th>Documentos</th>
-                        <!-- REMOVIDO: <th>Anexar Matrícula</th> -->
+                        <th>Documentos</th> <!-- Coluna para ação de validação -->
                         <th>Anexar Pagamento</th>
                         <th>CIE Emitida</th>
                     </tr>
@@ -388,8 +317,6 @@ $possiveisStatusValidacao = ['pendente', 'dados_aprovados'];
                             $docs = $inscTemp->getDocumentos(); // O modelo Inscricao.php atualizado já faz isso
                             $temMatricula = false;
                             foreach ($docs as $doc) {
-                                // Procura por 'matricula' ou 'matricula_frente', 'matricula_verso' se for dividido
-                                // Assumindo que o tipo é 'matricula' para o comprovante principal
                                 if ($doc['tipo'] === 'matricula') { $temMatricula = true; break; }
                             }
                             // --- FIM ATUALIZADO ---
@@ -425,11 +352,11 @@ $possiveisStatusValidacao = ['pendente', 'dados_aprovados'];
                             ?>
                         </td>
                         <td>
+                            <!-- LINK PARA A NOVA PÁGINA DE VALIDAÇÃO -->
                             <a href="validar_documentos.php?id=<?= $insc['id'] ?>" title="Gerenciar validação dos documentos desta inscrição">
                                 📋 Validar
                             </a>
                         </td>
-                        <!-- REMOVIDO: Célula da coluna "Anexar Matrícula" -->
                         <td class="acoes">
                             <?php if (in_array($insc['situacao'], ['aguardando_validacao', 'pagamento_pendente', 'dados_aprovados']) && !$temPagamento): ?>
                                 <form method="POST" enctype="multipart/form-data" class="upload-form" style="display:inline;">
