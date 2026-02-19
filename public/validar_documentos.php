@@ -45,6 +45,22 @@ if ($inscricaoId) {
         $estudante = $estudanteModel->buscarPorId($estudanteId);
         $inscricaoModel->id = $inscricaoId; // Garante que o ID está definido no modelo
         $documentos = $inscricaoModel->getDocumentos(); // Retorna documentos com entidade_tipo = 'inscricao' e entidade_id = $inscricaoId
+
+        // --- NOVO: Adicionar a foto do estudante como um documento para validação ---
+        if (!empty($estudante['foto'])) {
+            $fotoDoc = [
+                'id' => 'foto_estudante_' . $estudanteId, // ID único para a foto
+                'entidade_tipo' => 'estudante', // Tipo da entidade (opcional para exibição)
+                'entidade_id' => $estudanteId,
+                'tipo' => 'foto_3x4',
+                'caminho_arquivo' => $estudante['foto'],
+                'descricao' => 'Foto 3x4 do Estudante',
+                'validado' => 'pendente', // ou obter status real da foto se existir um campo específico
+                'observacoes_validacao' => null // ou obter observações reais da foto se existirem
+            ];
+            $documentos[] = $fotoDoc; // Adiciona a foto à lista de documentos
+        }
+        // --- FIM NOVO ---
     }
 }
 ?>
@@ -140,6 +156,10 @@ if ($inscricaoId) {
         <?php if ($estudante): ?>
             <p><strong>Estudante:</strong> <?= htmlspecialchars($estudante['nome']) ?></p>
             <p><strong>Matrícula:</strong> <?= htmlspecialchars($estudante['matricula']) ?></p>
+            <!-- Adicionando mais informações do estudante -->
+            <p><strong>Curso:</strong> <?= htmlspecialchars($estudante['curso'] ?? 'N/A') ?></p>
+            <p><strong>Campus:</strong> <?= htmlspecialchars($estudante['campus'] ?? 'N/A') ?></p>
+            <p><strong>Instituição:</strong> <?= htmlspecialchars($estudante['instituicao_nome'] ?? 'N/A') ?></p>
         <?php endif; ?>
 
         <?php if ($sucesso): ?>
@@ -163,7 +183,7 @@ if ($inscricaoId) {
                 </thead>
                 <tbody>
                     <?php foreach ($documentos as $doc): ?>
-                    <tr id="linha_doc_<?= $doc['id'] ?>"> <!-- ID para atualizar a linha -->
+                    <tr id="linha_doc_<?= is_numeric($doc['id']) ? $doc['id'] : str_replace('foto_estudante_', '', $doc['id']) ?>"> <!-- ID para atualizar a linha (ajustado para lidar com IDs não numéricos) -->
                         <td>
                             <?php if ($doc['tipo'] === 'foto_3x4'): ?>
                                 <img src="../public/<?= htmlspecialchars($doc['caminho_arquivo']) ?>" class="foto-preview" alt="Foto 3x4">
@@ -171,31 +191,26 @@ if ($inscricaoId) {
                             <?= htmlspecialchars($doc['descricao']) ?>
                         </td>
                         <td><?= htmlspecialchars(ucfirst(str_replace('_', ' ', $doc['tipo']))) ?></td>
-                        <td id="status_doc_<?= $doc['id'] ?>"> <!-- ID para atualizar o status -->
+                        <td id="status_doc_<?= is_numeric($doc['id']) ? $doc['id'] : str_replace('foto_estudante_', '', $doc['id']) ?>"> <!-- ID para atualizar o status (ajustado) -->
                             <span class="status-<?= $doc['validado'] ?? 'n_a' ?>">
                                 <?= ucfirst($doc['validado'] ?? 'n/a') ?>
                             </span>
                         </td>
-                        <td id="obs_doc_<?= $doc['id'] ?>"> <!-- ID para atualizar a observação -->
+                        <td id="obs_doc_<?= is_numeric($doc['id']) ? $doc['id'] : str_replace('foto_estudante_', '', $doc['id']) ?>"> <!-- ID para atualizar a observação (ajustado) -->
                             <?= htmlspecialchars($doc['observacoes_validacao'] ?? '—') ?>
                         </td>
                         <td>
                             <a href="../public/<?= htmlspecialchars($doc['caminho_arquivo']) ?>" target="_blank" class="doc-link">Ver</a>
                         </td>
                         <td>
-                            <button class="btn-acao btn-validar-modal" onclick="validarDocumento(<?= $doc['id'] ?>)">Validar</button>
-                            <button class="btn-acao btn-reenviar-modal" onclick="abrirModalReenvio(<?= $doc['id'] ?>, '<?= addslashes(htmlspecialchars($doc['descricao'])) ?>')">Solicitar Reenvio</button>
+                            <button class="btn-acao btn-validar-modal" onclick="validarDocumento(<?= is_numeric($doc['id']) ? $doc['id'] : str_replace('foto_estudante_', '', $doc['id']) ?>)">Validar</button>
+                            <button class="btn-acao btn-reenviar-modal" onclick="abrirModalReenvio(<?= is_numeric($doc['id']) ? $doc['id'] : str_replace('foto_estudante_', '', $doc['id']) ?>, '<?= addslashes(htmlspecialchars($doc['descricao'])) ?>')">Solicitar Reenvio</button>
                         </td>
                     </tr>
                     <?php endforeach; ?>
                 </tbody>
             </table>
 
-            <!-- Botão "Finalizar Validação" removido -->
-            <!-- <div style="margin-top: 20px;">
-                <button type="submit" class="btn-validar">Finalizar Validação</button>
-                <button type="button" onclick="window.location.href='gerenciar_inscricoes.php'" class="btn-cancelar" style="margin-left: 10px;">Cancelar</button>
-            </div> -->
         <?php else: ?>
             <p>Nenhum documento encontrado para esta inscrição.</p>
             <a href="gerenciar_inscricoes.php">← Voltar</a>
