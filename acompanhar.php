@@ -10,6 +10,7 @@ $inscricaoModel = new Inscricao($db);
 
 $resultado = null;
 $erro = '';
+$documentos = []; // Array para armazenar os documentos
 
 // ================================
 // BUSCA POR CÓDIGO DE INSCRIÇÃO E DATA DE NASCIMENTO
@@ -30,6 +31,15 @@ if ($_POST) {
         $stmt->bindParam(':data_nascimento', $dataNascimento); // Novo bind
         $stmt->execute();
         $resultado = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        // Se encontrou a inscrição, buscar os documentos associados
+        if ($resultado) {
+            $inscricaoId = $resultado['id'];
+            // Criar uma instância temporária do modelo Inscricao para buscar os docs
+            $tempInscricaoModel = new Inscricao($db);
+            $tempInscricaoModel->id = $inscricaoId; // Define o ID
+            $documentos = $tempInscricaoModel->getDocumentos(); // Obtém os documentos
+        }
     } else {
         $erro = "Informe o código de inscrição e sua data de nascimento.";
     }
@@ -48,7 +58,7 @@ if ($_POST) {
     <title>Acompanhar Inscrição</title>
     <style>
         body { font-family: sans-serif; margin: 0; padding: 20px; background: #f9f9f9; }
-        .container { max-width: 600px; margin: 0 auto; background: white; padding: 30px; border-radius: 8px; }
+        .container { max-width: 800px; margin: 0 auto; background: white; padding: 30px; border-radius: 8px; }
         h2 { color: #1976d2; text-align: center; margin-bottom: 30px; }
         .form-group { margin-bottom: 15px; }
         label { display: block; margin-bottom: 4px; font-weight: bold; }
@@ -67,6 +77,10 @@ if ($_POST) {
         a { color: #1976d2; text-decoration: none; display: inline-block; margin-top: 20px; }
         a:hover { text-decoration: underline; }
         .erro { background: #ffebee; color: #c62828; padding: 10px; border-radius: 4px; margin: 10px 0; }
+        table { width: 100%; border-collapse: collapse; background: white; margin-top: 20px; }
+        th, td { padding: 10px; text-align: left; border-bottom: 1px solid #eee; }
+        th { background: #f5f5f5; }
+        .status-invalido { color: #c62828; font-weight: bold; } /* Estilo para status inválido */
     </style>
 </head>
 <body>
@@ -112,6 +126,54 @@ if ($_POST) {
                 }
                 ?>
             </div>
+
+            <!-- Seção de Documentos -->
+            <?php if (!empty($documentos)): ?>
+                <h3>Seus Documentos</h3>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Documento</th>
+                            <th>Tipo</th>
+                            <th>Status</th>
+                            <th>Observação</th>
+                            <th>Visualizar</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php foreach ($documentos as $doc): ?>
+                        <tr>
+                            <td><?= htmlspecialchars($doc['descricao']) ?></td>
+                            <td><?= htmlspecialchars(ucfirst(str_replace('_', ' ', $doc['tipo']))) ?></td>
+                            <td>
+                                <span class="status-<?= $doc['validado'] ?>">
+                                    <?= ucfirst($doc['validado']) ?>
+                                </span>
+                            </td>
+                            <td>
+                                <?php if ($doc['validado'] === 'invalido' && !empty($doc['observacoes_validacao'])): ?>
+                                    <strong style="color: #c62828;">Solicitação de Reenvio:</strong><br>
+                                    <?= htmlspecialchars($doc['observacoes_validacao']) ?>
+                                <?php elseif (!empty($doc['observacoes_validacao'])): ?>
+                                    <?= htmlspecialchars($doc['observacoes_validacao']) ?>
+                                <?php else: ?>
+                                    —
+                                <?php endif; ?>
+                            </td>
+                            <td>
+                                <a href="public/<?= htmlspecialchars($doc['caminho_arquivo']) ?>" target="_blank">Ver</a>
+                            </td>
+                        </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+                <p><small>Se algum documento tiver status <span class="status-invalido">Inválido</span>, por favor, reenvie-o conforme as instruções acima.</small></p>
+            <?php else: ?>
+                <h3>Seus Documentos</h3>
+                <p>Nenhum documento foi anexado à sua inscrição ainda.</p>
+            <?php endif; ?>
+            <!-- Fim Seção de Documentos -->
+
             <a href="index.php">← Voltar ao início</a>
         <?php else: ?>
             <?php if ($erro): ?>
@@ -127,7 +189,6 @@ if ($_POST) {
                     <label>Data de Nascimento *</label>
                     <input type="date" name="data_nascimento" value="<?= htmlspecialchars($_POST['data_nascimento'] ?? '') ?>" required>
                 </div>
-                <!-- Removido o campo CPF -->
                 <button type="submit">Consultar Status</button>
             </form>
             <a href="index.php">← Voltar ao início</a>
