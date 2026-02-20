@@ -55,7 +55,7 @@ if ($inscricaoId) {
                 'tipo' => 'foto_3x4',
                 'caminho_arquivo' => $estudante['foto'],
                 'descricao' => 'Foto 3x4 do Estudante',
-                'validado' => 'pendente', // ou obter status real da foto se existir um campo específico
+                'validado' => $estudante['foto_validada'] ?? 'pendente', // Obter status real da foto se existir um campo específico
                 'observacoes_validacao' => null // ou obter observações reais da foto se existirem
             ];
             $documentos[] = $fotoDoc; // Adiciona a foto à lista de documentos
@@ -183,7 +183,13 @@ if ($inscricaoId) {
                 </thead>
                 <tbody>
                     <?php foreach ($documentos as $doc): ?>
-                    <tr id="linha_doc_<?= is_numeric($doc['id']) ? $doc['id'] : str_replace('foto_estudante_', '', $doc['id']) ?>"> <!-- ID para atualizar a linha (ajustado para lidar com IDs não numéricos) -->
+                    <?php
+                    // Gera IDs seguros para HTML (substitui caracteres inválidos por _, mas preserva o prefixo 'foto_estudante_')
+                    $safeDocId = is_numeric($doc['id']) ? $doc['id'] : (string)$doc['id'];
+                    // Não é mais necessário um replace complexo, pois o ID original é usado no JS e no HTML.
+                    // O JS cuida da detecção correta.
+                    ?>
+                    <tr id="linha_doc_<?= htmlspecialchars($safeDocId) ?>"> <!-- ID para atualizar a linha -->
                         <td>
                             <?php if ($doc['tipo'] === 'foto_3x4'): ?>
                                 <img src="../public/<?= htmlspecialchars($doc['caminho_arquivo']) ?>" class="foto-preview" alt="Foto 3x4">
@@ -191,20 +197,20 @@ if ($inscricaoId) {
                             <?= htmlspecialchars($doc['descricao']) ?>
                         </td>
                         <td><?= htmlspecialchars(ucfirst(str_replace('_', ' ', $doc['tipo']))) ?></td>
-                        <td id="status_doc_<?= is_numeric($doc['id']) ? $doc['id'] : str_replace('foto_estudante_', '', $doc['id']) ?>"> <!-- ID para atualizar o status (ajustado) -->
+                        <td id="status_doc_<?= htmlspecialchars($safeDocId) ?>"> <!-- ID para atualizar o status -->
                             <span class="status-<?= $doc['validado'] ?? 'n_a' ?>">
                                 <?= ucfirst($doc['validado'] ?? 'n/a') ?>
                             </span>
                         </td>
-                        <td id="obs_doc_<?= is_numeric($doc['id']) ? $doc['id'] : str_replace('foto_estudante_', '', $doc['id']) ?>"> <!-- ID para atualizar a observação (ajustado) -->
+                        <td id="obs_doc_<?= htmlspecialchars($safeDocId) ?>"> <!-- ID para atualizar a observação -->
                             <?= htmlspecialchars($doc['observacoes_validacao'] ?? '—') ?>
                         </td>
                         <td>
                             <a href="../public/<?= htmlspecialchars($doc['caminho_arquivo']) ?>" target="_blank" class="doc-link">Ver</a>
                         </td>
                         <td>
-                            <button class="btn-acao btn-validar-modal" onclick="validarDocumento(<?= is_numeric($doc['id']) ? $doc['id'] : str_replace('foto_estudante_', '', $doc['id']) ?>)">Validar</button>
-                            <button class="btn-acao btn-reenviar-modal" onclick="abrirModalReenvio(<?= is_numeric($doc['id']) ? $doc['id'] : str_replace('foto_estudante_', '', $doc['id']) ?>, '<?= addslashes(htmlspecialchars($doc['descricao'])) ?>')">Solicitar Reenvio</button>
+                            <button class="btn-acao btn-validar-modal" onclick="validarDocumento('<?= addslashes($safeDocId) ?>')">Validar</button>
+                            <button class="btn-acao btn-reenviar-modal" onclick="abrirModalReenvio('<?= addslashes($safeDocId) ?>', '<?= addslashes(htmlspecialchars($doc['descricao'])) ?>')">Solicitar Reenvio</button>
                         </td>
                     </tr>
                     <?php endforeach; ?>
@@ -236,12 +242,17 @@ if ($inscricaoId) {
 
         function validarDocumento(docId) {
             if (!docId) return;
+
+            // --- DETECÇÃO DE FOTO DO ESTUDANTE E DEFINIÇÃO DE ENDPOINT ---
+            const ehFotoEstudante = typeof docId === 'string' && docId.startsWith('foto_estudante_');
+            const urlEndpoint = ehFotoEstudante ? 'atualizar_foto_estudante.php' : 'atualizar_documento.php';
+
             const dados = {
                 doc_id: docId,
                 acao: 'validar',
                 observacao: ''
             };
-            fetch('atualizar_documento.php', {
+            fetch(urlEndpoint, { // <-- Envia para o endpoint correto
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(dados)
@@ -293,6 +304,11 @@ if ($inscricaoId) {
 
         function confirmarReenvio() {
             if (!docIdReenvio) return;
+
+            // --- DETECÇÃO DE FOTO DO ESTUDANTE E DEFINIÇÃO DE ENDPOINT ---
+            const ehFotoEstudante = typeof docIdReenvio === 'string' && docIdReenvio.startsWith('foto_estudante_');
+            const urlEndpoint = ehFotoEstudante ? 'atualizar_foto_estudante.php' : 'atualizar_documento.php';
+
             const obsReenvio = document.getElementById('obs_reenvio');
             const resultadoDiv = document.getElementById('resultado_reenvio');
             const observacao = obsReenvio ? obsReenvio.value.trim() : '';
@@ -301,7 +317,7 @@ if ($inscricaoId) {
                 acao: 'reenviar',
                 observacao: observacao
             };
-            fetch('atualizar_documento.php', {
+            fetch(urlEndpoint, { // <-- Envia para o endpoint correto
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(dados)

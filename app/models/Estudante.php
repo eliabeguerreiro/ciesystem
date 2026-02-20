@@ -172,6 +172,19 @@ class Estudante {
         return $stmt->execute();
     }
 
+
+
+    public function atualizarStatusFoto($status) {
+        if (!in_array($status, ['pendente', 'validado', 'invalido'])) {
+            return false; // Status inválido
+        }
+        $query = "UPDATE " . $this->table . " SET foto_validada = :status WHERE id = :id";
+        $stmt = $this->conn->prepare($query);
+        $stmt->bindParam(':status', $status);
+        $stmt->bindParam(':id', $this->id, PDO::PARAM_INT);
+        return $stmt->execute();
+    }
+
     // Deletar (mantido)
     public function deletar() {
         $query = "DELETE FROM {$this->table} WHERE id = :id";
