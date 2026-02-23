@@ -13,7 +13,10 @@ class Inscricao {
     // *** NOVOS CAMPOS ***
     public $pagamento_confirmado;
     public $matricula_validada;
-    public $origem; 
+    public $origem;
+    // --- NOVO: Campo para ID do documento da foto ---
+    public $foto_documento_id;
+    // --- FIM NOVO ---
 
 
 
@@ -40,6 +43,9 @@ class Inscricao {
         // *** INICIALIZAR NOVOS CAMPOS ***
         $this->pagamento_confirmado = 0; // FALSE
         $this->matricula_validada = 0; // FALSE - Inicialmente 0, a validação será controlada pela nova lógica de documentos
+        // --- INICIALIZAR NOVO CAMPO ---
+        $this->foto_documento_id = null; // Inicialmente, nenhuma foto é anexada
+        // --- FIM INICIALIZAR NOVO CAMPO ---
         // A origem deve ser definida ANTES de chamar criar()
         if (empty($this->origem) || !in_array($this->origem, ['estudante', 'administrador'])) {
              // Pode lançar um erro ou definir um padrão, mas é melhor garantir que seja definido antes
@@ -49,10 +55,12 @@ class Inscricao {
         // *** FIM INICIALIZAR NOVOS CAMPOS ***
         $query = "INSERT INTO {$this->table} (
             estudante_id, codigo_inscricao, data_validade, situacao,
-            pagamento_confirmado, matricula_validada, origem -- Incluir novo campo
+            pagamento_confirmado, matricula_validada, origem,
+            foto_documento_id -- Incluir novo campo
         ) VALUES (
             :estudante_id, :codigo_inscricao, :data_validade, :situacao,
-            :pagamento_confirmado, :matricula_validada, :origem -- Incluir novo campo
+            :pagamento_confirmado, :matricula_validada, :origem,
+            :foto_documento_id -- Incluir novo campo
         )";
         $stmt = $this->conn->prepare($query);
         $stmt->bindParam(':estudante_id', $this->estudante_id, PDO::PARAM_INT);
@@ -63,6 +71,9 @@ class Inscricao {
         $stmt->bindParam(':pagamento_confirmado', $this->pagamento_confirmado, PDO::PARAM_BOOL);
         $stmt->bindParam(':matricula_validada', $this->matricula_validada, PDO::PARAM_BOOL); // <-- Pode ser alterado futuramente pela nova lógica
         $stmt->bindParam(':origem', $this->origem);
+        // --- BIND DO NOVO CAMPO ---
+        $stmt->bindParam(':foto_documento_id', $this->foto_documento_id, PDO::PARAM_INT); // Pode ser NULL
+        // --- FIM BIND DO NOVO CAMPO ---
         // *** FIM BIND DOS NOVOS CAMPOS ***
         return $stmt->execute();
     }
@@ -123,10 +134,31 @@ class Inscricao {
                 $stmt->bindValue(':descricao', $nomeOriginal);
                 $stmt->bindValue(':validado', $estadoInicial, PDO::PARAM_STR); // <-- Novo campo
                 $stmt->execute();
+
+                // --- NOVO: Associar o ID do documento da foto à inscrição ---
+                if ($tipo === 'foto_3x4') {
+                    $docId = $this->conn->lastInsertId(); // Obtém o ID do documento recém-inserido
+                    if ($docId) {
+                        $this->foto_documento_id = (int)$docId;
+                        $this->atualizarFotoDocumentoId(); // Salva o ID na inscrição
+                    }
+                }
+                // --- FIM NOVO ---
             }
         }
         return true;
     }
+
+    // --- NOVO MÉTODO: Atualizar o ID do documento da foto na inscrição ---
+    public function atualizarFotoDocumentoId() {
+        $query = "UPDATE {$this->table} SET foto_documento_id = :foto_documento_id WHERE id = :id";
+        $stmt = $this->conn->prepare($query);
+        $stmt->bindParam(':foto_documento_id', $this->foto_documento_id, PDO::PARAM_INT); // Pode ser NULL
+        $stmt->bindParam(':id', $this->id, PDO::PARAM_INT);
+        return $stmt->execute();
+    }
+    // --- FIM NOVO MÉTODO ---
+
 
     // *** NOVO MÉTODO: Obter origem da inscrição ***
     private function getOrigemInscricao() {

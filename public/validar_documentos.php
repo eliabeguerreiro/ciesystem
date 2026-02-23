@@ -36,7 +36,6 @@ if (isset($_GET['id'])) {
 // CARREGAR DADOS PARA EXIBIÇÃO
 // ================================
 $documentos = [];
-$fotoEstudante = null; // Foto antiga, se necessário
 
 if ($inscricaoId) {
     $inscricao = $inscricaoModel->buscarPorId($inscricaoId);
@@ -45,22 +44,7 @@ if ($inscricaoId) {
         $estudante = $estudanteModel->buscarPorId($estudanteId);
         $inscricaoModel->id = $inscricaoId; // Garante que o ID está definido no modelo
         $documentos = $inscricaoModel->getDocumentos(); // Retorna documentos com entidade_tipo = 'inscricao' e entidade_id = $inscricaoId
-
-        // --- NOVO: Adicionar a foto do estudante como um documento para validação ---
-        if (!empty($estudante['foto'])) {
-            $fotoDoc = [
-                'id' => 'foto_estudante_' . $estudanteId, // ID único para a foto
-                'entidade_tipo' => 'estudante', // Tipo da entidade (opcional para exibição)
-                'entidade_id' => $estudanteId,
-                'tipo' => 'foto_3x4',
-                'caminho_arquivo' => $estudante['foto'],
-                'descricao' => 'Foto 3x4 do Estudante',
-                'validado' => $estudante['foto_validada'] ?? 'pendente', // Obter status real da foto se existir um campo específico
-                'observacoes_validacao' => null // ou obter observações reais da foto se existirem
-            ];
-            $documentos[] = $fotoDoc; // Adiciona a foto à lista de documentos
-        }
-        // --- FIM NOVO ---
+        // --- REMOVIDO: Lógica para adicionar a foto do estudante ---
     }
 }
 ?>
@@ -184,12 +168,10 @@ if ($inscricaoId) {
                 <tbody>
                     <?php foreach ($documentos as $doc): ?>
                     <?php
-                    // Gera IDs seguros para HTML (substitui caracteres inválidos por _, mas preserva o prefixo 'foto_estudante_')
-                    $safeDocId = is_numeric($doc['id']) ? $doc['id'] : (string)$doc['id'];
-                    // Não é mais necessário um replace complexo, pois o ID original é usado no JS e no HTML.
-                    // O JS cuida da detecção correta.
+                    // O ID do documento agora é sempre numérico (da tabela documentos_anexados)
+                    $safeDocId = $doc['id'];
                     ?>
-                    <tr id="linha_doc_<?= htmlspecialchars($safeDocId) ?>"> <!-- ID para atualizar a linha -->
+                    <tr id="linha_doc_<?= $safeDocId ?>"> <!-- ID para atualizar a linha -->
                         <td>
                             <?php if ($doc['tipo'] === 'foto_3x4'): ?>
                                 <img src="../public/<?= htmlspecialchars($doc['caminho_arquivo']) ?>" class="foto-preview" alt="Foto 3x4">
@@ -197,20 +179,20 @@ if ($inscricaoId) {
                             <?= htmlspecialchars($doc['descricao']) ?>
                         </td>
                         <td><?= htmlspecialchars(ucfirst(str_replace('_', ' ', $doc['tipo']))) ?></td>
-                        <td id="status_doc_<?= htmlspecialchars($safeDocId) ?>"> <!-- ID para atualizar o status -->
+                        <td id="status_doc_<?= $safeDocId ?>"> <!-- ID para atualizar o status -->
                             <span class="status-<?= $doc['validado'] ?? 'n_a' ?>">
                                 <?= ucfirst($doc['validado'] ?? 'n/a') ?>
                             </span>
                         </td>
-                        <td id="obs_doc_<?= htmlspecialchars($safeDocId) ?>"> <!-- ID para atualizar a observação -->
+                        <td id="obs_doc_<?= $safeDocId ?>"> <!-- ID para atualizar a observação -->
                             <?= htmlspecialchars($doc['observacoes_validacao'] ?? '—') ?>
                         </td>
                         <td>
                             <a href="../public/<?= htmlspecialchars($doc['caminho_arquivo']) ?>" target="_blank" class="doc-link">Ver</a>
                         </td>
                         <td>
-                            <button class="btn-acao btn-validar-modal" onclick="validarDocumento('<?= addslashes($safeDocId) ?>')">Validar</button>
-                            <button class="btn-acao btn-reenviar-modal" onclick="abrirModalReenvio('<?= addslashes($safeDocId) ?>', '<?= addslashes(htmlspecialchars($doc['descricao'])) ?>')">Solicitar Reenvio</button>
+                            <button class="btn-acao btn-validar-modal" onclick="validarDocumento('<?= $safeDocId ?>')">Validar</button>
+                            <button class="btn-acao btn-reenviar-modal" onclick="abrirModalReenvio('<?= $safeDocId ?>', '<?= addslashes(htmlspecialchars($doc['descricao'])) ?>')">Solicitar Reenvio</button>
                         </td>
                     </tr>
                     <?php endforeach; ?>
@@ -243,16 +225,16 @@ if ($inscricaoId) {
         function validarDocumento(docId) {
             if (!docId) return;
 
-            // --- DETECÇÃO DE FOTO DO ESTUDANTE E DEFINIÇÃO DE ENDPOINT ---
-            const ehFotoEstudante = typeof docId === 'string' && docId.startsWith('foto_estudante_');
-            const urlEndpoint = ehFotoEstudante ? 'atualizar_foto_estudante.php' : 'atualizar_documento.php';
+            // Agora, todos os documentos (inclusive foto_3x4) são tratados como documentos da inscrição
+            // Portanto, sempre envia para atualizar_documento.php
+            const urlEndpoint = 'atualizar_documento.php';
 
             const dados = {
                 doc_id: docId,
                 acao: 'validar',
                 observacao: ''
             };
-            fetch(urlEndpoint, { // <-- Envia para o endpoint correto
+            fetch(urlEndpoint, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(dados)
@@ -305,9 +287,8 @@ if ($inscricaoId) {
         function confirmarReenvio() {
             if (!docIdReenvio) return;
 
-            // --- DETECÇÃO DE FOTO DO ESTUDANTE E DEFINIÇÃO DE ENDPOINT ---
-            const ehFotoEstudante = typeof docIdReenvio === 'string' && docIdReenvio.startsWith('foto_estudante_');
-            const urlEndpoint = ehFotoEstudante ? 'atualizar_foto_estudante.php' : 'atualizar_documento.php';
+            // Semelhante a validarDocumento, sempre envia para atualizar_documento.php
+            const urlEndpoint = 'atualizar_documento.php';
 
             const obsReenvio = document.getElementById('obs_reenvio');
             const resultadoDiv = document.getElementById('resultado_reenvio');
@@ -317,7 +298,7 @@ if ($inscricaoId) {
                 acao: 'reenviar',
                 observacao: observacao
             };
-            fetch(urlEndpoint, { // <-- Envia para o endpoint correto
+            fetch(urlEndpoint, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(dados)

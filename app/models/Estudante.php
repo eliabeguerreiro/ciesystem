@@ -12,12 +12,9 @@ class Estudante {
     public $documento_tipo;
     public $documento_numero;
     public $documento_orgao;
-    public $foto;
-    // --- MUDANÇA AQUI ---
-    // Mantido: public $instituicao; (compatibilidade com banco de dados)
-    public $instituicao;
-    public $instituicao_id; // <- Adicionado novo campo
-    // --- FIM MUDANÇA ---
+    // --- REMOVIDO: public $foto; ---
+    // --- REMOVIDO: public $foto_validada; ---
+    public $instituicao_id; // <- Mantido
     public $campus;
     public $curso;
     public $nivel;
@@ -33,18 +30,15 @@ class Estudante {
 
     // Cria novo estudante
     public function criar() {
-        // --- MUDANÇA AQUI ---
-        // Atualizado para usar 'instituicao_id' em vez de 'instituicao'
         $query = "INSERT INTO {$this->table} (
-            nome, data_nascimento, cpf, documento_tipo, documento_numero, documento_orgao, foto,
+            nome, data_nascimento, cpf, documento_tipo, documento_numero, documento_orgao,
             instituicao_id, campus, curso, nivel, matricula, situacao_academica, status_validacao,
             email, telefone
         ) VALUES (
-            :nome, :data_nascimento, :cpf, :documento_tipo, :documento_numero, :documento_orgao, :foto,
+            :nome, :data_nascimento, :cpf, :documento_tipo, :documento_numero, :documento_orgao,
             :instituicao_id, :campus, :curso, :nivel, :matricula, :situacao_academica, :status_validacao,
             :email, :telefone
         )";
-        // --- FIM MUDANÇA ---
         $stmt = $this->conn->prepare($query);
 
         // Sanitização
@@ -52,10 +46,7 @@ class Estudante {
         $this->cpf = preg_replace('/[^0-9]/', '', $this->cpf);
         $this->documento_numero = htmlspecialchars(strip_tags(trim($this->documento_numero)));
         $this->documento_orgao = htmlspecialchars(strip_tags(trim($this->documento_orgao)));
-        // --- MUDANÇA AQUI ---
-        // Preenchendo instituicao com valor padrão vazio (compatibilidade com banco de dados)
         $this->instituicao_id = (int)$this->instituicao_id; // Sanitiza como inteiro
-        // --- FIM MUDANÇA ---
         $this->campus = htmlspecialchars(strip_tags(trim($this->campus)));
         $this->curso = htmlspecialchars(strip_tags(trim($this->curso)));
         $this->nivel = htmlspecialchars(strip_tags(trim($this->nivel)));
@@ -71,12 +62,8 @@ class Estudante {
         $stmt->bindParam(':documento_tipo', $this->documento_tipo);
         $stmt->bindParam(':documento_numero', $this->documento_numero);
         $stmt->bindParam(':documento_orgao', $this->documento_orgao);
-        $stmt->bindParam(':foto', $this->foto);
-        // --- MUDANÇA AQUI ---
-        // Adicionado bindParam para :instituicao (valor padrão vazio)
-
-        $stmt->bindParam(':instituicao_id', $this->instituicao_id, PDO::PARAM_INT); // <- Adicionado bindParam para :instituicao_id
-        // --- FIM MUDANÇA ---
+        // --- REMOVIDO: $stmt->bindParam(':foto', $this->foto); ---
+        $stmt->bindParam(':instituicao_id', $this->instituicao_id, PDO::PARAM_INT);
         $stmt->bindParam(':campus', $this->campus);
         $stmt->bindParam(':curso', $this->curso);
         $stmt->bindParam(':nivel', $this->nivel);
@@ -91,10 +78,7 @@ class Estudante {
 
     // Listar todos (atualizado para incluir nome da instituição via JOIN)
     public function listar() {
-        // JOIN com a tabela de instituições para obter o nome
-        // --- MUDANÇA AQUI ---
         $query = "SELECT e.*, i.nome AS instituicao_nome FROM {$this->table} e LEFT JOIN instituicoes i ON e.instituicao_id = i.id ORDER BY e.nome";
-        // --- FIM MUDANÇA ---
         $stmt = $this->conn->prepare($query);
         $stmt->execute();
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -102,19 +86,15 @@ class Estudante {
 
     // Buscar por ID (atualizado para incluir nome da instituição via JOIN)
     public function buscarPorId($id) {
-        // --- MUDANÇA AQUI ---
         $query = "SELECT e.*, i.nome AS instituicao_nome FROM {$this->table} e LEFT JOIN instituicoes i ON e.instituicao_id = i.id WHERE e.id = :id";
-        // --- FIM MUDANÇA ---
         $stmt = $this->conn->prepare($query);
         $stmt->bindParam(':id', $id);
         $stmt->execute();
         return $stmt->fetch(PDO::FETCH_ASSOC);
     }
 
-    // Atualizar (atualizado para incluir instituicao_id)
+    // Atualizar (atualizado para incluir instituicao_id, removido foto e foto_validada)
     public function atualizar() {
-        // --- MUDANÇA AQUI ---
-        // Atualizado para usar 'instituicao_id' em vez de 'instituicao'
         $query = "UPDATE {$this->table} SET
             nome = :nome,
             data_nascimento = :data_nascimento,
@@ -122,7 +102,6 @@ class Estudante {
             documento_tipo = :documento_tipo,
             documento_numero = :documento_numero,
             documento_orgao = :documento_orgao,
-            foto = :foto,
             instituicao_id = :instituicao_id,
             campus = :campus,
             curso = :curso,
@@ -134,7 +113,6 @@ class Estudante {
             telefone = :telefone,
             atualizado_em = NOW()
         WHERE id = :id";
-        // --- FIM MUDANÇA ---
         $stmt = $this->conn->prepare($query);
 
         // Mesma sanitização do criar()
@@ -157,7 +135,8 @@ class Estudante {
         $stmt->bindParam(':documento_tipo', $this->documento_tipo);
         $stmt->bindParam(':documento_numero', $this->documento_numero);
         $stmt->bindParam(':documento_orgao', $this->documento_orgao);
-        $stmt->bindParam(':foto', $this->foto);
+        // --- REMOVIDO: $stmt->bindParam(':foto', $this->foto); ---
+        // --- REMOVIDO: $stmt->bindParam(':foto_validada', $this->foto_validada); ---
         $stmt->bindParam(':instituicao_id', $this->instituicao_id, PDO::PARAM_INT);
         $stmt->bindParam(':campus', $this->campus);
         $stmt->bindParam(':curso', $this->curso);
@@ -172,19 +151,6 @@ class Estudante {
         return $stmt->execute();
     }
 
-
-
-    public function atualizarStatusFoto($status) {
-        if (!in_array($status, ['pendente', 'validado', 'invalido'])) {
-            return false; // Status inválido
-        }
-        $query = "UPDATE " . $this->table . " SET foto_validada = :status WHERE id = :id";
-        $stmt = $this->conn->prepare($query);
-        $stmt->bindParam(':status', $status);
-        $stmt->bindParam(':id', $this->id, PDO::PARAM_INT);
-        return $stmt->execute();
-    }
-
     // Deletar (mantido)
     public function deletar() {
         $query = "DELETE FROM {$this->table} WHERE id = :id";
@@ -192,5 +158,7 @@ class Estudante {
         $stmt->bindParam(':id', $this->id);
         return $stmt->execute();
     }
+
+    // --- REMOVIDO: public function atualizarStatusFoto($status) ---
 }
 ?>
