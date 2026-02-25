@@ -4,17 +4,17 @@ require_once __DIR__ . '/app/config/database.php';
 require_once __DIR__ . '/app/models/Estudante.php';
 require_once __DIR__ . '/app/models/Inscricao.php';
 require_once __DIR__ . '/app/controllers/EstudanteController.php';
-require_once __DIR__ . '/app/models/DocumentoEstudante.php'; // Novo modelo
-require_once __DIR__ . '/app/models/Instituicao.php'; // Adicione esta linha
+require_once __DIR__ . '/app/models/DocumentoEstudante.php'; 
+require_once __DIR__ . '/app/models/Instituicao.php';
 
 $database = new Database();
 $db = $database->getConnection();
 
 $estudanteModel = new Estudante($db);
 $inscricaoModel = new Inscricao($db);
-$docIdentidadeModel = new DocumentoEstudante($db); // Instância do modelo de doc
-$instituicaoModel = new Instituicao($db); // Instância do modelo de instituição
-$estudanteController = new EstudanteController($db); // Instância do controller
+$docIdentidadeModel = new DocumentoEstudante($db); 
+$instituicaoModel = new Instituicao($db); 
+$estudanteController = new EstudanteController($db); 
 
 $erro = '';
 $sucesso = '';
@@ -24,7 +24,7 @@ $codigoGerado = '';
 // PROCESSAMENTO DO FORMULÁRIO
 // ================================
 if ($_POST) {
-    // Valida campos obrigatórios
+    
     $camposObrigatorios = ['nome', 'data_nascimento', 'cpf', 'documento_tipo', 'documento_numero',
                           'instituicao_id', 'curso', 'nivel', 'matricula'];
     foreach ($camposObrigatorios as $campo) {
@@ -55,6 +55,15 @@ if ($_POST) {
          $erro = "Tipo de documento de identidade inválido.";
     }
 
+    // ✅ CORREÇÃO: Validação da foto 3x4 antes do processamento
+    if (isset($_FILES['foto']) && $_FILES['foto']['error'] === UPLOAD_ERR_OK && !empty($_FILES['foto']['name'])) {
+        $allowed = ['jpg', 'jpeg', 'png'];
+        $ext = strtolower(pathinfo($_FILES['foto']['name'], PATHINFO_EXTENSION));
+        if (!in_array($ext, $allowed)) {
+            $erro = "Formato de foto inválido. Use JPG ou PNG.";
+        }
+    }
+
     if (empty($erro)) {
         // Verifica se CPF ou matrícula já existem
         $stmt = $db->prepare("SELECT id FROM estudantes WHERE cpf = ? OR matricula = ?");
@@ -62,17 +71,10 @@ if ($_POST) {
         if ($stmt->fetch()) {
             $erro = "CPF ou matrícula já cadastrados. Entre em contato com a administração.";
         } else {
-            // Processar foto se enviada
-            $fotoCaminho = null;
-            if (isset($_FILES['foto']) && $_FILES['foto']['error'] === UPLOAD_ERR_OK) {
-                 $fotoCaminho = $estudanteController->uploadFoto($_FILES['foto']);
-                 if (!$fotoCaminho) {
-                     $erro = "Erro ao fazer upload da foto.";
-                 }
-            } // Se não for enviada, $fotoCaminho continua null
-
-
-            if (empty($erro)) { // Prosseguir somente se a foto for válida ou não enviada
+            // ✅ CORREÇÃO: Removido upload via EstudanteController
+            // A foto será processada junto com os demais documentos
+            
+            if (empty($erro)) { // Prosseguir somente se não houve erro
                 // Cria estudante
                 $estudante = new Estudante($db);
                 $estudante->nome = $_POST['nome'];
@@ -90,7 +92,6 @@ if ($_POST) {
                 $estudante->email = $_POST['email'] ?? '';
                 $estudante->telefone = $_POST['telefone'] ?? '';
                 $estudante->status_validacao = 'pendente'; // ← diferente do cadastro manual
-                $estudante->foto = $fotoCaminho; // Atribuir a foto ou null
 
 
                 if ($estudante->criar()) {
@@ -110,20 +111,13 @@ if ($_POST) {
                         $inscricaoId = $resultado['id'];
                         $codigoGerado = $resultado['codigo_inscricao'];
 
-                        // --- NOVO: Salvar Foto 3x4 como documento anexado à inscrição ---
-                        if ($fotoCaminho) {
-                            // Usar o modelo DocumentoEstudante para salvar a foto na inscrição
-                            if (!$docIdentidadeModel->salvarUnicoArquivo($estudanteId, [
-                                'name' => 'Foto 3x4 - ' . $_POST['nome'] . '.jpg',
-                                'type' => 'image/jpeg',
-                                'tmp_name' => $fotoCaminho,
-                                'error' => UPLOAD_ERR_OK,
-                                'size' => filesize(__DIR__ . '/public/' . $fotoCaminho)
-                            ], 'foto_3x4', 'pendente')) {
+                        // ✅ CORREÇÃO: Salvar Foto 3x4 como documento anexado à inscrição (unificado)
+                        if (isset($_FILES['foto']) && $_FILES['foto']['error'] === UPLOAD_ERR_OK && !empty($_FILES['foto']['name'])) {
+                            if (!$docIdentidadeModel->salvarUnicoArquivo($estudanteId, $_FILES['foto'], 'foto_3x4', 'pendente')) {
                                 $erro = "Erro ao salvar a foto 3x4 como documento anexado à inscrição.";
                             }
                         }
-                        // --- FIM NOVO ---
+                        // --- FIM CORREÇÃO ---
 
                         // Salvar comprovante de matrícula
                         if (!empty($_FILES['comprovante_matricula']['name'])) {

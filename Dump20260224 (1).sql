@@ -18,62 +18,37 @@ USE `ciesytem`;
 /*!40111 SET @OLD_SQL_NOTES=@@SQL_NOTES, SQL_NOTES=0 */;
 
 --
--- Table structure for table `documentos_estudante`
+-- Table structure for table `documentos_anexados`
 --
 
-DROP TABLE IF EXISTS `documentos_estudante`;
+DROP TABLE IF EXISTS `documentos_anexados`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
-CREATE TABLE `documentos_estudante` (
+CREATE TABLE `documentos_anexados` (
   `id` int NOT NULL AUTO_INCREMENT,
-  `estudante_id` int NOT NULL,
-  `tipo` enum('rg','cnh','passaporte','cpf','selfie_documento') CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `entidade_tipo` enum('estudante','inscricao') COLLATE utf8mb4_unicode_ci NOT NULL,
+  `entidade_id` int NOT NULL,
+  `tipo` enum('rg_frente','rg_verso','cnh_frente','cnh_verso','cpf_frente','cpf_verso','matricula','pagamento','selfie_documento') COLLATE utf8mb4_unicode_ci NOT NULL,
   `caminho_arquivo` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `descricao` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `criado_em` datetime DEFAULT CURRENT_TIMESTAMP,
+  `descricao` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `validado` enum('pendente','validado','invalido') COLLATE utf8mb4_unicode_ci DEFAULT 'pendente',
+  `observacoes_validacao` text COLLATE utf8mb4_unicode_ci,
+  `criado_em` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `atualizado_em` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
-  KEY `estudante_id` (`estudante_id`),
-  CONSTRAINT `documentos_estudante_ibfk_1` FOREIGN KEY (`estudante_id`) REFERENCES `estudantes` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=49 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+  KEY `idx_entidade` (`entidade_tipo`,`entidade_id`),
+  KEY `idx_tipo` (`tipo`)
+) ENGINE=InnoDB AUTO_INCREMENT=42 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
--- Dumping data for table `documentos_estudante`
+-- Dumping data for table `documentos_anexados`
 --
 
-LOCK TABLES `documentos_estudante` WRITE;
-/*!40000 ALTER TABLE `documentos_estudante` DISABLE KEYS */;
-/*!40000 ALTER TABLE `documentos_estudante` ENABLE KEYS */;
-UNLOCK TABLES;
-
---
--- Table structure for table `documentos_inscricao`
---
-
-DROP TABLE IF EXISTS `documentos_inscricao`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
-CREATE TABLE `documentos_inscricao` (
-  `id` int NOT NULL AUTO_INCREMENT,
-  `inscricao_id` int NOT NULL,
-  `tipo` enum('matricula','pagamento') CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
-  `caminho_arquivo` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `descricao` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `criado_em` datetime DEFAULT CURRENT_TIMESTAMP,
-  PRIMARY KEY (`id`),
-  KEY `fk_inscricao` (`inscricao_id`),
-  CONSTRAINT `documentos_inscricao_ibfk_1` FOREIGN KEY (`inscricao_id`) REFERENCES `inscricoes` (`id`) ON DELETE CASCADE,
-  CONSTRAINT `fk_inscricao` FOREIGN KEY (`inscricao_id`) REFERENCES `inscricoes` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=26 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
--- Dumping data for table `documentos_inscricao`
---
-
-LOCK TABLES `documentos_inscricao` WRITE;
-/*!40000 ALTER TABLE `documentos_inscricao` DISABLE KEYS */;
-/*!40000 ALTER TABLE `documentos_inscricao` ENABLE KEYS */;
+LOCK TABLES `documentos_anexados` WRITE;
+/*!40000 ALTER TABLE `documentos_anexados` DISABLE KEYS */;
+INSERT INTO `documentos_anexados` VALUES (37,'inscricao',46,'rg_frente','uploads/documentos/doc_rg_frente_699c844e03366.jpg','1ebdm.jpg','validado',NULL,'2026-02-23 16:46:06','2026-02-23 16:46:06'),(38,'inscricao',46,'rg_verso','uploads/documentos/doc_rg_verso_699c844e03abd.jpg','1ebdm.jpg','validado',NULL,'2026-02-23 16:46:06','2026-02-23 16:46:06'),(39,'inscricao',50,'rg_frente','uploads/documentos/doc_rg_frente_699dccf9b66f2.jpg','1ebdme.jpg','validado',NULL,'2026-02-24 16:08:25','2026-02-24 16:08:25'),(40,'inscricao',50,'rg_verso','uploads/documentos/doc_rg_verso_699dccf9b6f3e.jpg','1ebdme.jpg','validado',NULL,'2026-02-24 16:08:25','2026-02-24 16:08:25'),(41,'inscricao',50,'matricula','uploads/documentos/doc_matricula_699dccf9b76fa.jpg','diploma_eliabe.jpg','validado',NULL,'2026-02-24 16:08:25','2026-02-24 16:08:25');
+/*!40000 ALTER TABLE `documentos_anexados` ENABLE KEYS */;
 UNLOCK TABLES;
 
 --
@@ -91,8 +66,7 @@ CREATE TABLE `estudantes` (
   `documento_tipo` enum('RG','CNH','PASSAPORTE') COLLATE utf8mb4_unicode_ci NOT NULL,
   `documento_numero` varchar(30) COLLATE utf8mb4_unicode_ci NOT NULL,
   `documento_orgao` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `foto` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `instituicao` varchar(150) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `instituicao_id` int NOT NULL,
   `campus` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `curso` varchar(150) COLLATE utf8mb4_unicode_ci NOT NULL,
   `nivel` varchar(50) COLLATE utf8mb4_unicode_ci NOT NULL,
@@ -103,10 +77,9 @@ CREATE TABLE `estudantes` (
   `telefone` varchar(20) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `criado_em` datetime DEFAULT CURRENT_TIMESTAMP,
   `atualizado_em` datetime DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
-  `instituicao_id` int NOT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `cpf` (`cpf`)
-) ENGINE=InnoDB AUTO_INCREMENT=37 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=56 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -115,6 +88,7 @@ CREATE TABLE `estudantes` (
 
 LOCK TABLES `estudantes` WRITE;
 /*!40000 ALTER TABLE `estudantes` DISABLE KEYS */;
+INSERT INTO `estudantes` VALUES (55,'teste_adm','2026-01-26','31298309183','RG','466351','aaaf',1,'teste_adm','teste_adm','teste_adm','teste_adm','Matriculado','dados_aprovados','teste@testre','81988668888','2026-02-24 13:08:25',NULL);
 /*!40000 ALTER TABLE `estudantes` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -134,13 +108,16 @@ CREATE TABLE `inscricoes` (
   `situacao` enum('aguardando_validacao','dados_aprovados','pagamento_pendente','documentos_anexados','pago','cie_emitida_aguardando_entrega','cie_entregue_na_instituicao') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'pagamento_pendente',
   `criado_em` datetime DEFAULT CURRENT_TIMESTAMP,
   `pagamento_confirmado` tinyint(1) NOT NULL DEFAULT '0',
-  `matricula_validada` tinyint(1) NOT NULL DEFAULT '0',
   `origem` enum('estudante','administrador') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'estudante',
+  `matricula_validada` tinyint(1) NOT NULL DEFAULT '0',
+  `foto_documento_id` int DEFAULT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `cie_codigo` (`codigo_inscricao`),
   KEY `estudante_id` (`estudante_id`),
+  KEY `fk_inscricao_foto_documento` (`foto_documento_id`),
+  CONSTRAINT `fk_inscricao_foto_documento` FOREIGN KEY (`foto_documento_id`) REFERENCES `documentos_anexados` (`id`) ON DELETE SET NULL ON UPDATE CASCADE,
   CONSTRAINT `inscricoes_ibfk_1` FOREIGN KEY (`estudante_id`) REFERENCES `estudantes` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=33 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=51 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -149,6 +126,7 @@ CREATE TABLE `inscricoes` (
 
 LOCK TABLES `inscricoes` WRITE;
 /*!40000 ALTER TABLE `inscricoes` DISABLE KEYS */;
+INSERT INTO `inscricoes` VALUES (50,55,'e7330c5e-ef6f-4ee3-83fb-c1ce0cb7d7df','2026-02-24','2027-03-31','aguardando_validacao','2026-02-24 13:08:25',0,'administrador',1,NULL);
 /*!40000 ALTER TABLE `inscricoes` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -240,7 +218,7 @@ CREATE TABLE `logs` (
   PRIMARY KEY (`id`),
   KEY `user_id` (`user_id`),
   CONSTRAINT `logs_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `usuarios` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=19 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=55 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -249,7 +227,7 @@ CREATE TABLE `logs` (
 
 LOCK TABLES `logs` WRITE;
 /*!40000 ALTER TABLE `logs` DISABLE KEYS */;
-INSERT INTO `logs` VALUES (1,1,'criou_usuario','Nome: levy, Email: levy@admin.com, Tipo: admin',4,'usuarios','2026-02-14 15:26:21'),(2,1,'criou_usuario','Nome: arielly, Email: arielly@teste.com, Tipo: user',5,'usuarios','2026-02-14 15:27:08'),(3,NULL,'inscricao_publica_realizada','Estudante: teste_public, CPF: 12312312312, Código Inscrição: a82bab79-5c05-4809-8a44-4cd54495f557',28,'inscricoes','2026-02-14 15:28:59'),(4,1,'criou_estudante_manualmente','Estudante: teste_pelo_sistema, Matrícula: teste_pelo_sistema',33,'estudantes','2026-02-14 15:32:03'),(5,1,'anexou_e_validou_comprovante_matricula','Inscrição ID: 29, Estudante ID: 33',29,'inscricoes','2026-02-14 15:32:50'),(6,1,'admin_validou_matricula_manualmente','Inscrição ID: 28, Estudante ID: 32',28,'inscricoes','2026-02-14 15:33:04'),(7,1,'anexou_e_confirmou_comprovante_pagamento','Inscrição ID: 29',29,'inscricoes','2026-02-14 15:39:02'),(8,1,'anexou_e_confirmou_comprovante_pagamento','Inscrição ID: 28',28,'inscricoes','2026-02-14 15:39:07'),(9,1,'cie_pronta_para_entrega','Inscrição ID: 29',29,'inscricoes','2026-02-14 15:59:53'),(10,1,'editou_estudante','ID: 33, Nome: teste_pelo_sistemaa, Matrícula: teste_pelo_sistema',33,'estudantes','2026-02-14 16:29:29'),(11,1,'criou_estudante_manualmente','Estudante: teste pao, Matrícula: teste pao',34,'estudantes','2026-02-14 16:51:06'),(12,1,'excluiu_estudante','ID: 34, Nome: teste pao',34,'estudantes','2026-02-14 17:27:01'),(13,1,'excluiu_estudante','ID: 33, Nome: teste_pelo_sistemaa',33,'estudantes','2026-02-14 17:27:03'),(14,1,'excluiu_estudante','ID: 32, Nome: teste_public',32,'estudantes','2026-02-14 17:27:05'),(15,1,'criou_estudante_manualmente','Estudante: teste_admin, Matrícula: teste_admin',35,'estudantes','2026-02-14 17:28:07'),(16,1,'excluiu_estudante','ID: 35, Nome: teste_admin',35,'estudantes','2026-02-14 17:28:15'),(17,1,'criou_estudante_manualmente','Estudante: teste_admin, Matrícula: teste_admin',36,'estudantes','2026-02-14 17:29:04'),(18,1,'excluiu_estudante','ID: 36, Nome: teste_admin',36,'estudantes','2026-02-14 18:14:43');
+INSERT INTO `logs` VALUES (48,NULL,'inscricao_publica_realizada','Estudante: Teste_Publico, CPF: 12332112312, Código Inscrição: a8175ed0-e14c-4e82-884f-eacbb1e43af4',44,'inscricoes','2026-02-23 13:17:04'),(49,1,'excluiu_estudante','ID: 50, Nome: teste_publico',50,'estudantes','2026-02-23 13:45:23'),(50,1,'criou_estudante_admin','Estudante: teste sistema, Matrícula: teste sistema (Sem documentos de identidade)',51,'estudantes','2026-02-23 13:46:06'),(51,1,'excluiu_estudante','ID: 50, Nome: ',50,'estudantes','2026-02-23 13:46:06'),(52,1,'excluiu_estudante','ID: 54, Nome: Teste_Publico',54,'estudantes','2026-02-24 13:07:23'),(53,1,'anexou_e_validou_comprovante_matricula_admin','Inscrição ID: 50, Estudante ID: 55, Origem: administrador',50,'inscricoes','2026-02-24 13:08:25'),(54,1,'excluiu_estudante','ID: 54, Nome: ',54,'estudantes','2026-02-24 13:08:25');
 /*!40000 ALTER TABLE `logs` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -291,4 +269,4 @@ UNLOCK TABLES;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2026-02-14 18:15:22
+-- Dump completed on 2026-02-24 13:19:05
