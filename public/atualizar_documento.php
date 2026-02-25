@@ -31,6 +31,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($docId <= 0 || !in_array($acao, ['validar', 'reenviar'])) {
         $erro = "Dados inválidos.";
     } else {
+        // === CORREÇÃO: Impedir alteração manual de pagamento ===
+        $queryCheckTipo = "SELECT tipo FROM documentos_anexados WHERE id = :id";
+        $stmtCheckTipo = $db->prepare($queryCheckTipo);
+        $stmtCheckTipo->bindParam(':id', $docId, PDO::PARAM_INT);
+        $stmtCheckTipo->execute();
+        $docTipo = $stmtCheckTipo->fetch(PDO::FETCH_ASSOC);
+        
+        if ($docTipo && $docTipo['tipo'] === 'pagamento') {
+            http_response_code(403);
+            echo json_encode([
+                'success' => false, 
+                'message' => 'Pagamentos são validados automaticamente e não podem ser alterados manualmente.'
+            ]);
+            exit;
+        }
+        // === FIM CORREÇÃO ===
+
         $novoStatus = ($acao === 'validar') ? 'validado' : 'invalido';
         $observacaoFinal = $acao === 'reenviar' 
             ? ($observacao ?: 'Reenvio solicitado.') 
@@ -60,10 +77,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $inscricaoId = $rowEntidade['entidade_id'];
 
                 // 3. Verificar se TODOS os documentos da inscrição estão 'validado'
+                // Exclui pagamento da verificação (já é auto-validado)
                 $queryCheckAll = "SELECT DISTINCT validado 
                                   FROM documentos_anexados 
                                   WHERE entidade_tipo = 'inscricao' 
-                                    AND entidade_id = :entidade_id";
+                                    AND entidade_id = :entidade_id
+                                    AND tipo != 'pagamento'";
                 $stmtCheckAll = $db->prepare($queryCheckAll);
                 $stmtCheckAll->bindParam(':entidade_id', $inscricaoId, PDO::PARAM_INT);
                 $stmtCheckAll->execute();
@@ -129,7 +148,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $dados['novo_status'] = ucfirst($novoStatus);
                     $dados['nova_obs'] = htmlspecialchars($observacaoFinal);
                     $dados['inscricao_atualizada'] = $todosValidados;
-                    $dados['estudante_aprovado'] = $estudanteAprovado; // ← Novo campo para o frontend
+                    $dados['estudante_aprovado'] = $estudanteAprovado;
                     
                 } else {
                     // Atualizou o doc, mas falhou ao atualizar status da inscrição

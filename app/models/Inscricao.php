@@ -108,6 +108,10 @@ class Inscricao {
         $origemDaInscricao = $this->getOrigemInscricao(); // Obter origem para definir estado inicial
         $estadoInicial = ($origemDaInscricao === 'administrador') ? 'validado' : 'pendente';
 
+        if ($tipo === 'pagamento') {
+            $estadoInicial = 'validado'; // Pagamento é auto-validado
+        }
+        
         foreach ($documentos['name'] as $index => $nomeOriginal) {
             if (!isset($documentos['error'][$index]) || $documentos['error'][$index] !== UPLOAD_ERR_OK) continue;
             if (!isset($documentos['tmp_name'][$index]) || $documentos['tmp_name'][$index] === '') continue;

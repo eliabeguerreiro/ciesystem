@@ -42,9 +42,14 @@ if ($inscricaoId) {
     if ($inscricao) {
         $estudanteId = $inscricao['estudante_id'];
         $estudante = $estudanteModel->buscarPorId($estudanteId);
-        $inscricaoModel->id = $inscricaoId; // Garante que o ID está definido no modelo
-        $documentos = $inscricaoModel->getDocumentos(); // Retorna documentos com entidade_tipo = 'inscricao' e entidade_id = $inscricaoId
-        // --- REMOVIDO: Lógica para adicionar a foto do estudante ---
+        $inscricaoModel->id = $inscricaoId;
+        $documentos = $inscricaoModel->getDocumentos();
+        
+        // === FILTRAR: Remover comprovante de pagamento da lista de validação ===
+        $documentos = array_filter($documentos, function($doc) {
+            return $doc['tipo'] !== 'pagamento';
+        });
+        // === FIM FILTRAR ===
     }
 }
 ?>
@@ -73,12 +78,13 @@ if ($inscricaoId) {
         .btn-acao { background-color: #1976d2; color: white; border: none; padding: 4px 8px; cursor: pointer; }
         .btn-acao:hover { background-color: #1565c0; }
         .status-n_a { color: #555; font-style: italic; }
-        .status-invalido { color: #c62828; font-weight: bold; } /* Estilo para status inválido */
+        .status-invalido { color: #c62828; font-weight: bold; }
+        .status-validado { color: #2e7d32; font-weight: bold; }
         .foto-preview { width: 60px; height: 60px; object-fit: cover; border: 1px solid #ddd; border-radius: 4px; }
 
         /* Estilo da Modal */
         .modal {
-            display: none; /* Hidden by default */
+            display: none;
             position: fixed;
             z-index: 1000;
             left: 0;
@@ -86,7 +92,7 @@ if ($inscricaoId) {
             width: 100%;
             height: 100%;
             overflow: auto;
-            background-color: rgba(0,0,0,0.4); /* Black w/ opacity */
+            background-color: rgba(0,0,0,0.4);
         }
 
         .modal-content {
@@ -137,13 +143,18 @@ if ($inscricaoId) {
     <div class="container">
         <a href="gerenciar_inscricoes.php" class="voltar">← Voltar à Lista de Inscrições</a>
         <h2>Validar Documentos da Inscrição #<?= htmlspecialchars($inscricaoId) ?></h2>
+        
         <?php if ($estudante): ?>
             <p><strong>Estudante:</strong> <?= htmlspecialchars($estudante['nome']) ?></p>
             <p><strong>Matrícula:</strong> <?= htmlspecialchars($estudante['matricula']) ?></p>
-            <!-- Adicionando mais informações do estudante -->
             <p><strong>Curso:</strong> <?= htmlspecialchars($estudante['curso'] ?? 'N/A') ?></p>
             <p><strong>Campus:</strong> <?= htmlspecialchars($estudante['campus'] ?? 'N/A') ?></p>
             <p><strong>Instituição:</strong> <?= htmlspecialchars($estudante['instituicao_nome'] ?? 'N/A') ?></p>
+            <p><strong>Status de Validação:</strong> 
+                <span style="font-weight: bold; color: <?= $estudante['status_validacao'] === 'dados_aprovados' ? '#2e7d32' : '#f57c00' ?>">
+                    <?= ucfirst(str_replace('_', ' ', $estudante['status_validacao'])) ?>
+                </span>
+            </p>
         <?php endif; ?>
 
         <?php if ($sucesso): ?>
@@ -168,10 +179,9 @@ if ($inscricaoId) {
                 <tbody>
                     <?php foreach ($documentos as $doc): ?>
                     <?php
-                    // O ID do documento agora é sempre numérico (da tabela documentos_anexados)
                     $safeDocId = $doc['id'];
                     ?>
-                    <tr id="linha_doc_<?= $safeDocId ?>"> <!-- ID para atualizar a linha -->
+                    <tr id="linha_doc_<?= $safeDocId ?>">
                         <td>
                             <?php if ($doc['tipo'] === 'foto_3x4'): ?>
                                 <img src="../public/<?= htmlspecialchars($doc['caminho_arquivo']) ?>" class="foto-preview" alt="Foto 3x4">
@@ -179,20 +189,24 @@ if ($inscricaoId) {
                             <?= htmlspecialchars($doc['descricao']) ?>
                         </td>
                         <td><?= htmlspecialchars(ucfirst(str_replace('_', ' ', $doc['tipo']))) ?></td>
-                        <td id="status_doc_<?= $safeDocId ?>"> <!-- ID para atualizar o status -->
+                        <td id="status_doc_<?= $safeDocId ?>">
                             <span class="status-<?= $doc['validado'] ?? 'n_a' ?>">
                                 <?= ucfirst($doc['validado'] ?? 'n/a') ?>
                             </span>
                         </td>
-                        <td id="obs_doc_<?= $safeDocId ?>"> <!-- ID para atualizar a observação -->
+                        <td id="obs_doc_<?= $safeDocId ?>">
                             <?= htmlspecialchars($doc['observacoes_validacao'] ?? '—') ?>
                         </td>
                         <td>
                             <a href="../public/<?= htmlspecialchars($doc['caminho_arquivo']) ?>" target="_blank" class="doc-link">Ver</a>
                         </td>
-                        <td>
-                            <button class="btn-acao btn-validar-modal" onclick="validarDocumento('<?= $safeDocId ?>')">Validar</button>
-                            <button class="btn-acao btn-reenviar-modal" onclick="abrirModalReenvio('<?= $safeDocId ?>', '<?= addslashes(htmlspecialchars($doc['descricao'])) ?>')">Solicitar Reenvio</button>
+                        <td class="celula_acoes_<?= $safeDocId ?>">
+                            <?php if (($doc['validado'] ?? 'pendente') !== 'validado'): ?>
+                                <button class="btn-acao btn-validar-modal" onclick="validarDocumento('<?= $safeDocId ?>')">Validar</button>
+                                <button class="btn-acao btn-reenviar-modal" onclick="abrirModalReenvio('<?= $safeDocId ?>', '<?= addslashes(htmlspecialchars($doc['descricao'])) ?>')">Solicitar Reenvio</button>
+                            <?php else: ?>
+                                <span style="color:#2e7d32; font-weight:bold;">✓ Aprovado</span>
+                            <?php endif; ?>
                         </td>
                     </tr>
                     <?php endforeach; ?>
@@ -200,7 +214,10 @@ if ($inscricaoId) {
             </table>
 
         <?php else: ?>
-            <p>Nenhum documento encontrado para esta inscrição.</p>
+            <p>Nenhum documento pendente de validação para esta inscrição.</p>
+            <?php if ($estudante && $estudante['status_validacao'] === 'dados_aprovados'): ?>
+                <p style="color: #2e7d32; font-weight: bold;">✅ Todos os documentos já foram validados!</p>
+            <?php endif; ?>
             <a href="gerenciar_inscricoes.php">← Voltar</a>
         <?php endif; ?>
     </div>
@@ -218,22 +235,19 @@ if ($inscricaoId) {
     </div>
 
     <script>
-        // Variáveis globais para modal de reenvio
         let docIdReenvio = null;
         let nomeDocReenvio = '';
 
         function validarDocumento(docId) {
             if (!docId) return;
 
-            // Agora, todos os documentos (inclusive foto_3x4) são tratados como documentos da inscrição
-            // Portanto, sempre envia para atualizar_documento.php
             const urlEndpoint = 'atualizar_documento.php';
-
             const dados = {
                 doc_id: docId,
                 acao: 'validar',
                 observacao: ''
             };
+            
             fetch(urlEndpoint, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -244,11 +258,25 @@ if ($inscricaoId) {
                 if (data.success) {
                     const statusCell = document.getElementById(`status_doc_${docId}`);
                     const obsCell = document.getElementById(`obs_doc_${docId}`);
+                    const celulaAcoes = document.querySelector(`.celula_acoes_${docId}`);
+                    
                     if (statusCell) {
                         statusCell.innerHTML = `<span class="status-validado">${data.novo_status}</span>`;
                     }
                     if (obsCell) {
                         obsCell.textContent = data.nova_obs;
+                    }
+                    
+                    // ✅ Esconder botões e mostrar "✓ Aprovado"
+                    if (celulaAcoes && data.novo_status === 'Validado') {
+                        celulaAcoes.innerHTML = '<span style="color:#2e7d32; font-weight:bold;">✓ Aprovado</span>';
+                    }
+                    
+                    // ✅ Alertar se o estudante foi aprovado automaticamente
+                    if (data.estudante_aprovado) {
+                        alert('✅ Todos os documentos validados!\n\nStatus do estudante atualizado para "Dados Aprovados".');
+                        // Opcional: recarregar para atualizar o status no cabeçalho
+                        location.reload();
                     }
                 } else {
                     alert(data.message || 'Erro ao validar documento.');
@@ -266,6 +294,7 @@ if ($inscricaoId) {
             const modalElement = document.getElementById('modal_reenvio');
             const obsReenvio = document.getElementById('obs_reenvio');
             const resultadoDiv = document.getElementById('resultado_reenvio');
+            
             if (!nomeDocElement || !modalElement || !obsReenvio || !resultadoDiv) {
                 alert('Erro ao abrir modal.');
                 return;
@@ -287,17 +316,17 @@ if ($inscricaoId) {
         function confirmarReenvio() {
             if (!docIdReenvio) return;
 
-            // Semelhante a validarDocumento, sempre envia para atualizar_documento.php
             const urlEndpoint = 'atualizar_documento.php';
-
             const obsReenvio = document.getElementById('obs_reenvio');
             const resultadoDiv = document.getElementById('resultado_reenvio');
             const observacao = obsReenvio ? obsReenvio.value.trim() : '';
+            
             const dados = {
                 doc_id: docIdReenvio,
                 acao: 'reenviar',
                 observacao: observacao
             };
+            
             fetch(urlEndpoint, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -308,15 +337,20 @@ if ($inscricaoId) {
                 if (data.success) {
                     const statusCell = document.getElementById(`status_doc_${docIdReenvio}`);
                     const obsCell = document.getElementById(`obs_doc_${docIdReenvio}`);
+                    
                     if (statusCell) {
                         statusCell.innerHTML = `<span class="status-invalido">${data.novo_status}</span>`;
                     }
                     if (obsCell) {
                         obsCell.textContent = data.nova_obs;
                     }
+                    
                     resultadoDiv.className = 'success';
                     resultadoDiv.textContent = data.message;
                     resultadoDiv.style.display = 'block';
+                    
+                    // Manter botões visíveis para reenvio (documento ficou inválido)
+                    
                     setTimeout(() => { fecharModalReenvio(); }, 1200);
                 } else {
                     resultadoDiv.className = 'error';

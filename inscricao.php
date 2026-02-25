@@ -74,7 +74,7 @@ if ($_POST) {
             // ✅ CORREÇÃO: Removido upload via EstudanteController
             // A foto será processada junto com os demais documentos
             
-            if (empty($erro)) { // Prosseguir somente se não houve erro
+            if (empty($erro)) {
                 // Cria estudante
                 $estudante = new Estudante($db);
                 $estudante->nome = $_POST['nome'];
@@ -83,7 +83,7 @@ if ($_POST) {
                 $estudante->documento_tipo = $_POST['documento_tipo'];
                 $estudante->documento_numero = $_POST['documento_numero'];
                 $estudante->documento_orgao = $_POST['documento_orgao'] ?? '';
-                $estudante->instituicao_id = (int)($_POST['instituicao_id'] ?? 0); // Sanitiza como inteiro
+                $estudante->instituicao_id = (int)($_POST['instituicao_id'] ?? 0);
                 $estudante->campus = $_POST['campus'] ?? '';
                 $estudante->curso = $_POST['curso'];
                 $estudante->nivel = $_POST['nivel'];
@@ -91,8 +91,7 @@ if ($_POST) {
                 $estudante->situacao_academica = $_POST['situacao_academica'] ?? 'Matriculado';
                 $estudante->email = $_POST['email'] ?? '';
                 $estudante->telefone = $_POST['telefone'] ?? '';
-                $estudante->status_validacao = 'pendente'; // ← diferente do cadastro manual
-
+                $estudante->status_validacao = 'pendente';
 
                 if ($estudante->criar()) {
                     $estudanteId = $db->lastInsertId();
@@ -100,8 +99,8 @@ if ($_POST) {
                     // Cria inscrição
                     $inscricao = new Inscricao($db);
                     $inscricao->estudante_id = $estudanteId;
-                    $inscricao->origem = 'estudante'; // Definir a origem como estudante
-                    $inscricao->criar(); // cria com status 'aguardando_validacao'
+                    $inscricao->origem = 'estudante';
+                    $inscricao->criar();
 
                     // Obter ID da inscrição
                     $stmt = $db->prepare("SELECT id, codigo_inscricao FROM inscricoes WHERE estudante_id = ? ORDER BY id DESC LIMIT 1");
@@ -117,7 +116,6 @@ if ($_POST) {
                                 $erro = "Erro ao salvar a foto 3x4 como documento anexado à inscrição.";
                             }
                         }
-                        // --- FIM CORREÇÃO ---
 
                         // Salvar comprovante de matrícula
                         if (!empty($_FILES['comprovante_matricula']['name'])) {
@@ -131,13 +129,13 @@ if ($_POST) {
                             if (!$docIdentidadeModel->salvarFrenteVerso($estudanteId, $docFrente, $docVerso, $tipoDocIdentidade, 'pendente')) {
                                 $erro = "Erro ao salvar os documentos de identidade (Frente e Verso).";
                             } else {
-                                require_once __DIR__ . '/app/models/Log.php'; // Inclua o modelo Log
+                                require_once __DIR__ . '/app/models/Log.php';
                                 $log = new Log($db);
                                 $log->registrar(
-                                    null, // ID do usuário (nulo para ação pública)
+                                    null,
                                     'inscricao_publica_realizada',
                                     "Estudante: {$estudante->nome}, CPF: {$estudante->cpf}, Código Inscrição: {$codigoGerado}",
-                                    $inscricaoId, // ID da inscrição criada
+                                    $inscricaoId,
                                     'inscricoes'
                                 );
                                 $sucesso = "Inscrição realizada com sucesso!";
@@ -250,7 +248,6 @@ if ($_POST) {
                         <input type="file" name="doc_identidade_verso" accept=".jpg,.jpeg,.png,.pdf" required>
                     </div>
                 </div>
-
 
                 <!-- Dados Acadêmicos -->
                 <h3>Dados Acadêmicos</h3>
