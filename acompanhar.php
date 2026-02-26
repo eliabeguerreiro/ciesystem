@@ -131,6 +131,24 @@ if ($_POST) {
             margin: 5px 0;
         }
         .upload-btn:hover { background-color: #1565c0; }
+
+        /* --- NOVO: Estilo para o botão PIX --- */
+        .btn-pix {
+            display: inline-block;
+            background-color: #2e7d32; /* Verde Escuro */
+            color: white;
+            padding: 10px 20px;
+            text-decoration: none;
+            border-radius: 4px;
+            margin-top: 10px;
+            font-weight: bold;
+            transition: background-color 0.3s;
+            width: auto; /* Permite que o botão cresça com o texto */
+        }
+        .btn-pix:hover {
+            background-color: #1b5e20; /* Verde mais escuro no hover */
+        }
+        /* --- FIM NOVO --- */
     </style>
 </head>
 <body>
@@ -158,9 +176,25 @@ if ($_POST) {
                         break;
                     case 'pagamento_pendente':
                         echo '<p style="color:#f57c00;">Seus dados foram aprovados. Aguarde confirmação do pagamento.</p>';
+                        // --- BOTÃO PARA REALIZAR PAGAMENTO ---
+                        // Verificar se o pagamento ainda não foi confirmado
+                        if (!$resultado['pagamento_confirmado']) {
+                             echo '<a href="pagamento_pix.php?codigo=' . urlencode($resultado['codigo_inscricao']) . '&data_nascimento=' . urlencode($resultado['data_nascimento']) . '" class="btn-pix">Realizar Pagamento via PIX</a>';
+                        } else {
+                             echo '<p style="color:#2e7d32;">Pagamento confirmado (aguardando logística).</p>';
+                        }
+                        // --- FIM BOTÃO ---
                         break;
                     case 'documentos_anexados':
                         echo '<p style="color:#5d4037;">Documentos recebidos. Aguardando confirmação de pagamento.</p>';
+                        // --- BOTÃO PARA REALIZAR PAGAMENTO ---
+                        // Verificar se o pagamento ainda não foi confirmado
+                        if (!$resultado['pagamento_confirmado']) {
+                             echo '<a href="pagamento_pix.php?codigo=' . urlencode($resultado['codigo_inscricao']) . '&data_nascimento=' . urlencode($resultado['data_nascimento']) . '" class="btn-pix">Realizar Pagamento via PIX</a>';
+                        } else {
+                             echo '<p style="color:#2e7d32;">Pagamento confirmado (aguardando logística).</p>';
+                        }
+                        // --- FIM BOTÃO ---
                         break;
                     case 'pago':
                         echo '<p style="color:#2e7d32;">Pagamento confirmado! Sua CIE está sendo preparada para emissão.</p>';
