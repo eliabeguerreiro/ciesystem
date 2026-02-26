@@ -1,8 +1,4 @@
 <?php
-// app/controllers/AuthController.php
-
-// 🔴 REMOVA ESSA LINHA:
-// session_start();
 
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../models/usuario.php';
