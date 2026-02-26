@@ -289,7 +289,7 @@ $instituicoes = $instituicaoModel->listar();
                         <td><?= $ent['data_saida'] ? date('d/m/Y H:i', strtotime($ent['data_saida'])) : '—' ?></td>
                         <td><?= htmlspecialchars($ent['responsavel_saida']) ?></td>
                         <td><?= $ent['data_entrega_instituicao'] ? date('d/m/Y H:i', strtotime($ent['data_entrega_instituicao'])) : '—' ?></td>
-                        <td><?= htmlspecialchars($ent['responsavel_entrega']) ?></td>
+                        <td><?= htmlspecialchars($ent['responsavel_entrega'] ?? '—') ?></td>
                         <td><?= htmlspecialchars($ent['nome_registrador']) ?></td> <!-- Exibe nome do usuário -->
                         <td class="acoes">
                             <?php if ($ent['status'] === 'saida_para_entrega'): ?>
