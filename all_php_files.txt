@@ -4347,7 +4347,7 @@ $instituicoes = $instituicaoModel->listar();
 </body>
 </html>
 
---- location: c:\laragon\www\ciesytem\public\atualizar_documento.php ---
+--- location: c:\laragon\www\ciesytem\public\atualizar_documento.php --
 <?php
 session_start();
 
