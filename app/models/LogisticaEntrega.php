@@ -1,5 +1,5 @@
 <?php
-// Arquivo: c:\laragon\www\ciesytem\app\models\LogisticaEntrega.php
+// Arquivo: app/models/LogisticaEntrega.php
 require_once __DIR__ . '/../config/database.php';
 
 class LogisticaEntrega {
@@ -33,11 +33,11 @@ class LogisticaEntrega {
         // Sanitização
         $this->inscricao_id = (int)$this->inscricao_id;
         $this->instituicao_id = (int)$this->instituicao_id;
-        $this->status = 'saida_para_entrega'; // Status inicial
+        $this->status = 'saida_para_entrega';
         $this->responsavel_saida = htmlspecialchars(strip_tags(trim($this->responsavel_saida)));
-        $this->data_saida = $this->data_saida ?: date('Y-m-d H:i:s'); // Usa a data/hora atual se não for fornecida
+        $this->data_saida = $this->data_saida ?: date('Y-m-d H:i:s');
         $this->observacoes = htmlspecialchars(strip_tags(trim($this->observacoes)));
-        $this->registrado_por = (int)$this->registrado_por; // Sanitiza o ID do usuário registrado
+        $this->registrado_por = (int)$this->registrado_por;
 
         $stmt->bindParam(':inscricao_id', $this->inscricao_id, PDO::PARAM_INT);
         $stmt->bindParam(':instituicao_id', $this->instituicao_id, PDO::PARAM_INT);
@@ -45,7 +45,7 @@ class LogisticaEntrega {
         $stmt->bindParam(':responsavel_saida', $this->responsavel_saida);
         $stmt->bindParam(':data_saida', $this->data_saida);
         $stmt->bindParam(':observacoes', $this->observacoes);
-        $stmt->bindParam(':registrado_por', $this->registrado_por, PDO::PARAM_INT); // Adiciona o bind
+        $stmt->bindParam(':registrado_por', $this->registrado_por, PDO::PARAM_INT);
 
         return $stmt->execute();
     }
@@ -58,13 +58,12 @@ class LogisticaEntrega {
             data_entrega_instituicao = :data_entrega_instituicao,
             atualizado_em = NOW()
         WHERE inscricao_id = :inscricao_id AND status = 'saida_para_entrega'";
-        // Garante que só atualiza se o status anterior for 'saida_para_entrega'
+        
         $stmt = $this->conn->prepare($query);
 
-        // Sanitização
         $this->status = 'entregue_na_instituicao';
         $this->responsavel_entrega = htmlspecialchars(strip_tags(trim($this->responsavel_entrega)));
-        $this->data_entrega_instituicao = $this->data_entrega_instituicao ?: date('Y-m-d H:i:s'); // Usa a data/hora atual se não for fornecida
+        $this->data_entrega_instituicao = $this->data_entrega_instituicao ?: date('Y-m-d H:i:s');
         $this->inscricao_id = (int)$this->inscricao_id;
 
         $stmt->bindParam(':status', $this->status);
@@ -87,43 +86,7 @@ class LogisticaEntrega {
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
 
-    // Buscar registros de logística por instituição e status (opcional)
-    public function buscarPorInstituicao($instituicaoId, $status = null) {
-        $query = "SELECT le.*, u.nome AS nome_registrador, i.codigo_inscricao AS codigo_inscricao, e.nome AS nome_estudante
-                  FROM {$this->table} le
-                  LEFT JOIN usuarios u ON le.registrado_por = u.id
-                  LEFT JOIN inscricoes i ON le.inscricao_id = i.id
-                  LEFT JOIN estudantes e ON i.estudante_id = e.id
-                  WHERE le.instituicao_id = :instituicao_id";
-        if ($status) {
-            $query .= " AND le.status = :status";
-        }
-        $query .= " ORDER BY le.criado_em DESC";
-
-        $stmt = $this->conn->prepare($query);
-        $stmt->bindParam(':instituicao_id', $instituicaoId, PDO::PARAM_INT);
-        if ($status) {
-            $stmt->bindParam(':status', $status);
-        }
-        $stmt->execute();
-        return $stmt->fetchAll(PDO::FETCH_ASSOC);
-    }
-
-    // Listar todas as entregas (com possibilidade de filtros futuros)
-    public function listarTodas() {
-        $query = "SELECT le.*, u.nome AS nome_registrador, i.codigo_inscricao AS codigo_inscricao, e.nome AS nome_estudante, inst.nome AS nome_instituicao
-                  FROM {$this->table} le
-                  LEFT JOIN usuarios u ON le.registrado_por = u.id
-                  LEFT JOIN inscricoes i ON le.inscricao_id = i.id
-                  LEFT JOIN estudantes e ON i.estudante_id = e.id
-                  LEFT JOIN instituicoes inst ON le.instituicao_id = inst.id
-                  ORDER BY le.criado_em DESC";
-        $stmt = $this->conn->prepare($query);
-        $stmt->execute();
-        return $stmt->fetchAll(PDO::FETCH_ASSOC);
-    }
-
-    // --- NOVO MÉTODO: Listar com filtros e paginação ---
+    // Listar com filtros e paginação
     public function listarComFiltrosEPaginacao($filtroInstituicao = '', $filtroStatus = '', $offset = 0, $limit = 10) {
         $query = "SELECT le.*, u.nome AS nome_registrador, i.codigo_inscricao AS codigo_inscricao, e.nome AS nome_estudante, inst.nome AS nome_instituicao
                   FROM {$this->table} le
@@ -131,7 +94,7 @@ class LogisticaEntrega {
                   LEFT JOIN inscricoes i ON le.inscricao_id = i.id
                   LEFT JOIN estudantes e ON i.estudante_id = e.id
                   LEFT JOIN instituicoes inst ON le.instituicao_id = inst.id
-                  WHERE 1=1 "; // Condição neutra para facilitar adição de filtros
+                  WHERE 1=1 ";
 
         $params = [];
         if ($filtroInstituicao) {
@@ -156,6 +119,5 @@ class LogisticaEntrega {
         $stmt->execute();
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
-    // --- FIM NOVO MÉTODO ---
 }
 ?>
