@@ -165,51 +165,49 @@ if ($_POST) {
                         <?= ucfirst(str_replace('_', ' ', $resultado['situacao'])) ?>
                     </span>
                 </p>
-                <!-- Mensagens orientativas -->
-                <?php
-                switch ($resultado['situacao']) {
-                    case 'aguardando_validacao':
-                        echo '<p style="color:#f57c00;">Sua inscrição foi recebida e está em análise. Aguarde a validação dos dados e documentos.</p>';
-                        break;
-                    case 'dados_aprovados':
-                        echo '<p style="color:#f57c00;">Seus dados foram aprovados. Aguarde instruções para pagamento.</p>';
-                        break;
-                    case 'pagamento_pendente':
-                        echo '<p style="color:#f57c00;">Seus dados foram aprovados. Aguarde confirmação do pagamento.</p>';
-                        // --- BOTÃO PARA REALIZAR PAGAMENTO ---
-                        // Verificar se o pagamento ainda não foi confirmado
-                        if (!$resultado['pagamento_confirmado']) {
-                             echo '<a href="pagamento_pix.php?codigo=' . urlencode($resultado['codigo_inscricao']) . '&data_nascimento=' . urlencode($resultado['data_nascimento']) . '" class="btn-pix">Realizar Pagamento via PIX</a>';
-                        } else {
-                             echo '<p style="color:#2e7d32;">Pagamento confirmado (aguardando logística).</p>';
-                        }
-                        // --- FIM BOTÃO ---
-                        break;
-                    case 'documentos_anexados':
-                        echo '<p style="color:#5d4037;">Documentos recebidos. Aguardando confirmação de pagamento.</p>';
-                        // --- BOTÃO PARA REALIZAR PAGAMENTO ---
-                        // Verificar se o pagamento ainda não foi confirmado
-                        if (!$resultado['pagamento_confirmado']) {
-                             echo '<a href="pagamento_pix.php?codigo=' . urlencode($resultado['codigo_inscricao']) . '&data_nascimento=' . urlencode($resultado['data_nascimento']) . '" class="btn-pix">Realizar Pagamento via PIX</a>';
-                        } else {
-                             echo '<p style="color:#2e7d32;">Pagamento confirmado (aguardando logística).</p>';
-                        }
-                        // --- FIM BOTÃO ---
-                        break;
-                    case 'pago':
-                        echo '<p style="color:#2e7d32;">Pagamento confirmado! Sua CIE está sendo preparada para emissão.</p>';
-                        break;
-                    case 'cie_emitida_aguardando_entrega':
-                        echo '<p style="color:#5d4037;"><strong>Sua CIE foi emitida!</strong> Agora está aguardando logística de entrega para a instituição.</p>';
-                        break;
-                    case 'cie_entregue_na_instituicao':
-                        echo '<p style="color:#2e7d32;"><strong>Sua CIE foi entregue na instituição!</strong> Entre em contato com a secretaria para retirada.</p>';
-                        break;
-                    default:
-                        echo '<p>Em processamento...</p>';
-                }
-                ?>
-            </div>
+            <!-- Mensagens orientativas -->
+            <?php
+            $mostrarBotaoPix = false;
+            switch ($resultado['situacao']) {
+                case 'aguardando_validacao':
+                    echo '<p style="color:#f57c00;">Sua inscrição foi recebida e está em análise. Aguarde a validação dos dados e documentos.</p>';
+                    $mostrarBotaoPix = true; // ✅ Permite pagamento mesmo em análise
+                    break;
+                case 'dados_aprovados':
+                    echo '<p style="color:#f57c00;">Seus dados foram aprovados. Aguarde instruções para pagamento.</p>';
+                    $mostrarBotaoPix = true; // ✅ Permite pagamento
+                    break;
+                case 'pagamento_pendente':
+                    echo '<p style="color:#f57c00;">Seus dados foram aprovados. Aguarde confirmação do pagamento.</p>';
+                    $mostrarBotaoPix = true; // ✅ Permite pagamento (caso ainda não tenha sido feito)
+                    break;
+                case 'documentos_anexados':
+                    echo '<p style="color:#5d4037;">Documentos recebidos. Aguardando confirmação de pagamento.</p>';
+                    $mostrarBotaoPix = true; // ✅ Permite pagamento
+                    break;
+                case 'pago':
+                    echo '<p style="color:#2e7d32;">Pagamento confirmado! Sua CIE está sendo preparada para emissão.</p>';
+                    // Não mostra o botão, pois já pagou.
+                    break;
+                case 'cie_emitida_aguardando_entrega':
+                    echo '<p style="color:#5d4037;"><strong>Sua CIE foi emitida!</strong> Agora está aguardando logística de entrega para a instituição.</p>';
+                    // Não mostra o botão.
+                    break;
+                case 'cie_entregue_na_instituicao':
+                    echo '<p style="color:#2e7d32;"><strong>Sua CIE foi entregue na instituição!</strong> Entre em contato com a secretaria para retirada.</p>';
+                    // Não mostra o botão.
+                    break;
+                default:
+                    echo '<p>Em processamento...</p>';
+            }
+            ?>
+
+            <!-- Botão de Pagamento (Regra Final: Disponível sempre que a inscrição existir e o pagamento não for confirmado) -->
+            <?php if (!$resultado['pagamento_confirmado'] && $resultado['situacao'] !== 'pago' && $resultado['situacao'] !== 'cie_emitida_aguardando_entrega' && $resultado['situacao'] !== 'cie_entregue_na_instituicao'): ?>
+                <a href="pagamento_pix.php?codigo=<?= urlencode($resultado['codigo_inscricao']) ?>&data_nascimento=<?= urlencode($resultado['data_nascimento']) ?>" class="btn-pix">Realizar Pagamento via PIX</a>
+            <?php elseif ($resultado['pagamento_confirmado'] && in_array($resultado['situacao'], ['aguardando_validacao', 'dados_aprovados', 'pagamento_pendente', 'documentos_anexados'])): ?>
+                <p style="color:#2e7d32;">Pagamento confirmado. Aguarde a atualização automática do status da inscrição.</p>
+            <?php endif; ?>
 
             <!-- Seção de Documentos -->
             <?php if (!empty($documentos)): ?>
