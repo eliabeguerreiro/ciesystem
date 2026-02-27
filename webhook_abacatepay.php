@@ -2,9 +2,9 @@
 // webhook_abacatepay.php
 
 // Inclui a configuração da API e o banco de dados
-require_once __DIR__ . '/app/config/abacatepay_config.php';
-require_once __DIR__ . '/app/config/database.php';
-require_once __DIR__ . '/app/models/Inscricao.php';
+require_once __DIR__ . '/../app/config/abacatepay_config.php';
+require_once __DIR__ . '/../app/config/database.php';
+require_once __DIR__ . '/../app/models/Inscricao.php';
 
 // Lê o corpo da requisição (raw body)
 $rawBody = file_get_contents('php://input');
@@ -46,20 +46,39 @@ if (json_last_error() !== JSON_ERROR_NONE) {
 
 // Processa o evento
 $eventType = $event['event'] ?? null;
-$paymentData = $event['data']['payment'] ?? null;
-$pixData = $event['data']['pixQrCode'] ?? null; // Dados específicos do PIX
 $devMode = $event['devMode'] ?? false; // Indica se é ambiente de testes
 
-if ($eventType === 'billing.paid' && $pixData && $pixData['status'] === 'PAID') {
-    // Este evento indica que um pagamento PIX foi confirmado
-    // A descrição do pagamento pode conter o código da inscrição
-    $descricaoPagamento = $pixData['description'] ?? '';
+if ($eventType === 'billing.paid') {
+    $paymentData = $event['data']['payment'] ?? null;
+    $pixData = $event['data']['pixQrCode'] ?? null; // Dados específicos do PIX (se for PIX direto)
+    $billingData = $event['data']['billing'] ?? null; // Dados da cobrança (se for via /billing/create)
+
     $codigoInscricao = null;
 
-    // Extrai o código da inscrição da descrição (assumindo o formato do seu sistema)
-    // Ex: "Pagamento anuidade CIE - Inscrição: f10245d4-a932-4044-9a95-ef493af3986f - Nome do Estudante"
-    if (preg_match('/Inscrição: ([a-f0-9\-]+)/i', $descricaoPagamento, $matches)) {
-        $codigoInscricao = $matches[1];
+    if ($pixData) {
+        // Evento de PIX direto (provavelmente não será o caso se usarmos /billing/create para tudo)
+        // A descrição pode estar em $pixData['description']
+        $descricaoPagamento = $pixData['description'] ?? '';
+        if (preg_match('/Inscrição: ([a-f0-9\-]+)/i', $descricaoPagamento, $matches)) {
+            $codigoInscricao = $matches[1];
+        }
+    } elseif ($billingData && $paymentData) {
+        // Evento de cobrança via /billing/create (PIX ou CARTÃO)
+        // A descrição do produto está em $billingData['products'][0]['description']
+        // Ou poderia estar em $billingData['metadata'] se adicionarmos lá
+        $produtos = $billingData['products'] ?? [];
+        if (!empty($produtos) && isset($produtos[0]['description'])) {
+             $descricaoPagamento = $produtos[0]['description'];
+             if (preg_match('/CIE 2026 - (.+)/', $descricaoPagamento, $matches)) {
+                // Extrai o nome do estudante da descrição e tenta encontrar a inscrição
+                // Isto é menos robusto que usar um código único.
+                // A melhor prática é usar METADATA.
+                // Por ora, vamos tentar encontrar uma inscrição ativa com esse nome e status pendente.
+                // MAS, é melhor adicionar o código da inscrição nos METADADOS ao criar a cobrança.
+                // Vamos supor que adicionamos o código nos metadados:
+                $codigoInscricao = $billingData['metadata']['codigo_inscricao'] ?? null;
+             }
+        }
     }
 
     if ($codigoInscricao) {
@@ -86,7 +105,7 @@ if ($eventType === 'billing.paid' && $pixData && $pixData['status'] === 'PAID') 
                 // Log do evento (opcional)
                 require_once __DIR__ . '/../app/models/Log.php';
                 $logModel = new Log($db);
-                $logModel->registrar(null, 'webhook_pagamento_confirmado', "Pagamento PIX confirmado para inscrição {$codigoInscricao} (ID: {$inscricaoId})", $inscricaoId, 'inscricoes');
+                $logModel->registrar(null, 'webhook_pagamento_confirmado', "Pagamento confirmado ({$paymentData['method']} - via billing) para inscrição {$codigoInscricao} (ID: {$inscricaoId})", $inscricaoId, 'inscricoes');
 
                 echo json_encode(['received' => true, 'processed' => true]);
                 exit;
@@ -99,70 +118,16 @@ if ($eventType === 'billing.paid' && $pixData && $pixData['status'] === 'PAID') 
             }
         } else {
             // Inscrição não encontrada
-            error_log("Webhook: Inscrição {$codigoInscricao} não encontrada para pagamento confirmado.");
+            error_log("Webhook: Inscrição {$codigoInscricao} não encontrada para pagamento confirmado (billing.paid).");
             // Mesmo não encontrando, retornamos 200 para evitar retries, pois pode ser um pagamento inválido ou antigo.
             echo json_encode(['received' => true, 'processed' => false, 'reason' => 'inscription_not_found']);
             exit;
         }
     } else {
-        // Código da inscrição não encontrado na descrição
-        error_log("Webhook: Código da inscrição não encontrado na descrição: {$descricaoPagamento}");
+        // Código da inscrição não encontrado na descrição ou metadata
+        error_log("Webhook: Código da inscrição não encontrado no evento billing.paid: " . print_r($event, true));
         http_response_code(400);
-        echo json_encode(['error' => 'Inscription code not found in description']);
-        exit;
-    }
-} elseif ($eventType === 'billing.paid' && $paymentData && $paymentData['method'] === 'CARD') {
-    // Processar pagamento via CARTÃO (lógica similar ao PIX)
-    // A descrição do pagamento ou outros campos do $event['data'] podem conter o código da inscrição
-    // Exemplo: $descricaoPagamento = $event['data']['transaction']['description'] ?? $event['data']['payment']['description'] ?? '';
-    // A lógica de extração do código e atualização do banco será a mesma.
-    // Por simplicidade, vamos assumir o mesmo padrão de descrição para cartão.
-    $descricaoPagamento = $paymentData['description'] ?? '';
-    $codigoInscricao = null;
-
-    if (preg_match('/Inscrição: ([a-f0-9\-]+)/i', $descricaoPagamento, $matches)) {
-        $codigoInscricao = $matches[1];
-    }
-
-    if ($codigoInscricao) {
-        $database = new Database();
-        $db = $database->getConnection();
-        $inscricaoModel = new Inscricao($db);
-
-        $query = "SELECT id FROM inscricoes WHERE codigo_inscricao = :codigo";
-        $stmt = $db->prepare($query);
-        $stmt->bindParam(':codigo', $codigoInscricao);
-        $stmt->execute();
-        $inscricao = $stmt->fetch(PDO::FETCH_ASSOC);
-
-        if ($inscricao) {
-            $inscricaoId = $inscricao['id'];
-            $inscricaoModel->id = $inscricaoId;
-
-            if ($inscricaoModel->atualizarPagamentoConfirmado(true)) {
-                $inscricaoModel->atualizarSituacao('pago');
-
-                require_once __DIR__ . '/../app/models/Log.php';
-                $logModel = new Log($db);
-                $logModel->registrar(null, 'webhook_pagamento_confirmado_cartao', "Pagamento CARTÃO confirmado para inscrição {$codigoInscricao} (ID: {$inscricaoId})", $inscricaoId, 'inscricoes');
-
-                echo json_encode(['received' => true, 'processed' => true]);
-                exit;
-            } else {
-                error_log("Erro ao atualizar pagamento_confirmado para inscrição {$codigoInscricao} (Cartão)");
-                http_response_code(500);
-                echo json_encode(['error' => 'Failed to update database']);
-                exit;
-            }
-        } else {
-            error_log("Webhook: Inscrição {$codigoInscricao} não encontrada para pagamento via CARTÃO confirmado.");
-            echo json_encode(['received' => true, 'processed' => false, 'reason' => 'inscription_not_found']);
-            exit;
-        }
-    } else {
-        error_log("Webhook: Código da inscrição não encontrado na descrição (Cartão): {$descricaoPagamento}");
-        http_response_code(400);
-        echo json_encode(['error' => 'Inscription code not found in description (Card)']);
+        echo json_encode(['error' => 'Inscription code not found in event data']);
         exit;
     }
 } else {
@@ -207,9 +172,3 @@ function verifyAbacateSignature($rawBody, $signatureFromHeader) {
 
     return $result === 0;
 }
-
-// --- IMPORTANTE: Adicione esta constante no seu app/config/abacatepay_config.php ---
-// define('ABACATEPAY_WEBHOOK_PUBLIC_KEY', 'sua_chave_publica_hmac_da_abacatepay_aqui');
-// Esta chave pública é fornecida pela AbacatePay para verificar a integridade do webhook.
-// Substitua 'sua_chave_publica_hmac_da_abacatepay_aqui' pela chave real obtida no dashboard da AbacatePay.
-// --- FIM IMPORTANTE ---

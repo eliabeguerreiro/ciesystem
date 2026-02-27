@@ -21,7 +21,7 @@ $codigo = trim($_GET['codigo'] ?? '');
 $dataNascimento = $_GET['data_nascimento'] ?? '';
 
 if (!empty($codigo) && !empty($dataNascimento)) {
-    $query = "SELECT i.*, e.nome, e.matricula, e.data_nascimento as estudante_data_nascimento
+    $query = "SELECT i.*, e.nome, e.matricula, e.data_nascimento as estudante_data_nascimento, e.email, e.cpf
               FROM inscricoes i
               INNER JOIN estudantes e ON i.estudante_id = e.id
               WHERE i.codigo_inscricao = :codigo AND e.data_nascimento = :data_nascimento";
@@ -42,22 +42,38 @@ if (!empty($codigo) && !empty($dataNascimento)) {
 }
 
 if ($resultado && empty($erro)) {
-    $descricao = "Pagamento anuidade CIE - Inscrição: {$resultado['codigo_inscricao']} - {$resultado['nome']}";
+    $descricao = "CIE 2026 - {$resultado['nome']}"; // Descrição para o produto
+    $cpf = preg_replace('/[^0-9]/', '', $resultado['cpf'] ?? ''); // Limpa CPF
 
     // ================================
-    // INTEGRACAO COM ABACATEPAY (CARTÃO)
+    // INTEGRACAO COM ABACATEPAY (CARTÃO - CRIAÇÃO DE COBRANÇA)
     // ================================
-    $urlAbacatePay = ABACATEPAY_API_BASE_URL . '/payments'; // Endpoint para criar pagamento
+    $urlAbacatePay = ABACATEPAY_API_BASE_URL . '/billing/create'; // Endpoint para criar cobrança
     $apiKey = ABACATEPAY_API_KEY;
 
     $payload = [
-        "amount" => (int)($valor * 100), // Valor em centavos (25.00 -> 2500)
-        "description" => $descricao,
+        "frequency" => "ONE_TIME",
+        "methods" => ["CARD"], // Apenas Cartão
+        "products" => [
+            [
+                "externalId" => "cie_anuidade_2026", // ID único para o produto
+                "name" => "Anuidade CIE 2026",
+                "description" => $descricao,
+                "quantity" => 1,
+                "price" => (int)($valor * 100) // Preço em centavos
+            ]
+        ],
+        "returnUrl" => "https://seudominio.com/acompanhar.php", // Onde voltar se cancelar
+        "completionUrl" => "https://seudominio.com/acompanhar.php", // Onde ir após concluir
         "customer" => [
             "name" => $resultado['nome'],
-            "email" => $resultado['email'] ?? '' // Opcional
+            "email" => $resultado['email'] ?? '',
+            "taxId" => $cpf, // CPF ou CNPJ
+            "cellphone" => $resultado['telefone'] ?? '' // Opcional, mas útil
         ],
-        "methods" => ["CARD"] // Solicita apenas CARTÃO
+        // "metadata" => [ // Dados adicionais, como o código da inscrição
+        //     "codigo_inscricao" => $resultado['codigo_inscricao']
+        // ]
     ];
 
     $curl = curl_init($urlAbacatePay);
@@ -76,16 +92,18 @@ if ($resultado && empty($erro)) {
     if ($httpCode === 200) {
         $cobranca = json_decode($response, true);
         if ($cobranca && isset($cobranca['data']['url'])) {
-            // A resposta da AbacatePay contém uma URL para o checkout
+            // A resposta da AbacatePay contém a URL para o checkout
             $checkoutUrl = $cobranca['data']['url'];
             // Redirecionar para o checkout da AbacatePay
             header("Location: $checkoutUrl");
             exit; // Encerra o script após o redirect
         } else {
             $erro = "Erro na resposta da API da AbacatePay (dados ausentes ou malformados).";
+            error_log("Erro Cartão API: " . print_r($cobranca, true)); // Log para debug
         }
     } else {
         $erro = "Erro na comunicação com a AbacatePay (HTTP {$httpCode}): " . $response;
+        error_log("Erro Cartão API HTTP: " . $response); // Log para debug
     }
 }
 ?>

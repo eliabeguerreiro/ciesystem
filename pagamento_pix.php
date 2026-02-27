@@ -11,8 +11,8 @@ $inscricaoModel = new Inscricao($db);
 
 $resultado = null;
 $erro = '';
-$qrcode = null;
-$qrtext = null; // Chave Pix copia-e-cola
+$brCode = null; // Chave Pix copia-e-cola
+$brCodeBase64 = null; // Imagem do QR Code em Base64
 $valor = VALOR_PAGAMENTO_CIE; // Usa a constante definida no config
 
 // ================================
@@ -22,7 +22,7 @@ $codigo = trim($_GET['codigo'] ?? '');
 $dataNascimento = $_GET['data_nascimento'] ?? '';
 
 if (!empty($codigo) && !empty($dataNascimento)) {
-    $query = "SELECT i.*, e.nome, e.matricula, e.data_nascimento as estudante_data_nascimento
+    $query = "SELECT i.*, e.nome, e.matricula, e.data_nascimento as estudante_data_nascimento, e.email, e.cpf
               FROM inscricoes i
               INNER JOIN estudantes e ON i.estudante_id = e.id
               WHERE i.codigo_inscricao = :codigo AND e.data_nascimento = :data_nascimento";
@@ -43,22 +43,25 @@ if (!empty($codigo) && !empty($dataNascimento)) {
 }
 
 if ($resultado && empty($erro)) {
-    $descricao = "Pagamento anuidade CIE - Inscrição: {$resultado['codigo_inscricao']} - {$resultado['nome']}";
+    $descricao = "CIE 2026 - {$resultado['nome']}"; // Descrição curta (max 37 chars?)
+    $cpf = preg_replace('/[^0-9]/', '', $resultado['cpf'] ?? ''); // Limpa CPF
 
     // ================================
-    // INTEGRACAO COM ABACATEPAY (PIX)
+    // INTEGRACAO COM ABACATEPAY (PIX QR CODE)
     // ================================
-    $urlAbacatePay = ABACATEPAY_API_BASE_URL . '/payments'; // Endpoint para criar pagamento
+    $urlAbacatePay = ABACATEPAY_API_BASE_URL . '/pixQrCode/create'; // Endpoint para criar PIX
     $apiKey = ABACATEPAY_API_KEY;
 
     $payload = [
         "amount" => (int)($valor * 100), // Valor em centavos (25.00 -> 2500)
         "description" => $descricao,
-        "customer" => [
-            "name" => $resultado['nome'],
-            "email" => $resultado['email'] ?? '' // Opcional
-        ],
-        "methods" => ["PIX"] // Solicita apenas PIX
+        "expiresIn" => 3600, // Expira em 1 hora (em segundos)
+        // "customer" => [ // Opcional, talvez não seja necessário para PIX direto
+        //     "name" => $resultado['nome'],
+        //     "email" => $resultado['email'] ?? '',
+        //     "taxId" => $cpf, // CPF ou CNPJ
+        //     "cellphone" => "" // Opcional
+        // ]
     ];
 
     $curl = curl_init($urlAbacatePay);
@@ -75,47 +78,18 @@ if ($resultado && empty($erro)) {
     curl_close($curl);
 
     if ($httpCode === 200) {
-        $cobranca = json_decode($response, true);
-        if ($cobranca && isset($cobranca['data']['url'])) {
-            // A resposta da AbacatePay contém uma URL para o checkout
-            // Para PIX, você pode redirecionar o usuário para esta URL ou tentar extrair o QR Code
-            // A documentação oficial da AbacatePay deve indicar como obter o QR Code e a chave copia-e-cola
-            // Exemplo de como pode ser a resposta:
-            // {
-            //   "data": {
-            //     "id": "...",
-            //     "url": "https://abacatepay.com/pay/...",
-            //     "amount": 2500,
-            //     "status": "PENDING",
-            //     "methods": ["PIX"],
-            //     "qrCode": "data:image/png;base64,...", // Opcional, depende da API
-            //     "pixCopiaECola": "000201010212..."
-            //   },
-            //   "error": null
-            // }
-
-            // --- HIPÓTESE BASEADA NA DOCUMENTAÇÃO ---
-            // A API pode não retornar diretamente o QR Code e a chave copia-e-cola
-            // Neste caso, a melhor prática é redirecionar o usuário para a URL de checkout da AbacatePay
-            // que contém o QR Code e os detalhes.
-            $checkoutUrl = $cobranca['data']['url'];
-            header("Location: $checkoutUrl");
-            exit; // Encerra o script após o redirect
-
-            // --- SE A API RETORNAR QR CODE E CHAVE COPIA-E-COLA ---
-            // if (isset($cobranca['data']['qrCode'], $cobranca['data']['pixCopiaECola'])) {
-            //     $qrcode = $cobranca['data']['qrCode']; // Pode ser uma URL ou dados base64
-            //     $qrtext = $cobranca['data']['pixCopiaECola'];
-            // } else {
-            //     $erro = "Erro: API da AbacatePay não retornou QR Code ou chave copia-e-cola.";
-            // }
-            // --- FIM HIPÓTESE ---
-
+        $pixResponse = json_decode($response, true);
+        if ($pixResponse && isset($pixResponse['data']['brCode'], $pixResponse['data']['brCodeBase64'])) {
+            $brCode = $pixResponse['data']['brCode'];
+            $brCodeBase64 = $pixResponse['data']['brCodeBase64'];
+            // QR Code e chave copia-e-cola obtidos com sucesso
         } else {
-            $erro = "Erro na resposta da API da AbacatePay (dados ausentes ou malformados).";
+            $erro = "Erro: API da AbacatePay não retornou QR Code ou chave copia-e-cola (dados ausentes).";
+            error_log("Erro PIX API: " . print_r($pixResponse, true)); // Log para debug
         }
     } else {
         $erro = "Erro na comunicação com a AbacatePay (HTTP {$httpCode}): " . $response;
+        error_log("Erro PIX API HTTP: " . $response); // Log para debug
     }
 }
 ?>
@@ -124,12 +98,17 @@ if ($resultado && empty($erro)) {
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>Processando Pagamento via PIX - CIE</title>
+    <title>Pagamento via PIX - CIE</title>
     <style>
         body { font-family: sans-serif; margin: 0; padding: 20px; background: #f9f9f9; }
         .container { max-width: 600px; margin: 0 auto; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
         h2 { color: #2e7d32; text-align: center; margin-bottom: 30px; }
         .info-box { background: #e8f5e9; padding: 15px; border-radius: 6px; margin-bottom: 20px; }
+        .qrcode-container { text-align: center; margin: 20px 0; }
+        .qrcode-img { max-width: 200px; max-height: 200px; border: 1px solid #ddd; padding: 5px; background: white; }
+        .pix-text { background: #f5f5f5; padding: 10px; border-radius: 4px; font-family: monospace; word-break: break-all; margin: 10px 0; }
+        .copy-btn { background: #1976d2; color: white; border: none; padding: 8px 16px; cursor: pointer; border-radius: 4px; }
+        .copy-btn:hover { background: #1565c0; }
         .status-pendente { color: #f57c00; font-weight: bold; }
         a { color: #1976d2; text-decoration: none; display: inline-block; margin-top: 20px; }
         a:hover { text-decoration: underline; }
@@ -138,7 +117,7 @@ if ($resultado && empty($erro)) {
 </head>
 <body>
     <div class="container">
-        <h2>Processando Pagamento via PIX - Inscrição #<?= htmlspecialchars($codigo ?? 'N/A') ?></h2>
+        <h2>Pagamento via PIX - Inscrição #<?= htmlspecialchars($codigo ?? 'N/A') ?></h2>
 
         <?php if ($erro): ?>
             <div class="erro"><?= htmlspecialchars($erro) ?></div>
@@ -152,12 +131,52 @@ if ($resultado && empty($erro)) {
                 <p><strong>Valor a Pagar:</strong> R$ <?= number_format($valor, 2, ',', '.') ?></p>
                 <p><strong>Descrição:</strong> <?= htmlspecialchars($descricao) ?></p>
             </div>
-            <p>Redirecionando para o checkout da AbacatePay...</p>
-            <!-- O redirecionamento já foi feito via header() acima -->
+
+            <?php if ($brCodeBase64 && $brCode): ?>
+                <h3>Como pagar?</h3>
+                <p>Escaneie o QR Code abaixo ou copie a chave Pix para realizar o pagamento.</p>
+
+                <div class="qrcode-container">
+                    <img src="data:image/png;base64,<?= htmlspecialchars($brCodeBase64) ?>" alt="QR Code PIX" class="qrcode-img" />
+                </div>
+
+                <div class="pix-text">
+                    <pre id="pix-key"><?= htmlspecialchars($brCode) ?></pre>
+                    <button class="copy-btn" onclick="copiarChave()">Copiar Chave Pix</button>
+                </div>
+
+                <p><small>Após o pagamento, o status será atualizado automaticamente pelo sistema quando o gateway confirmar o pagamento. Aguarde alguns minutos e atualize a página de acompanhamento.</small></p>
+
+            <?php else: ?>
+                <div class="erro">Erro ao gerar o QR Code ou a chave Pix.</div>
+            <?php endif; ?>
+
+            <a href="acompanhar.php">← Voltar ao Acompanhamento</a>
+
         <?php else: ?>
             <div class="erro">Erro ao carregar os dados de pagamento.</div>
             <a href="acompanhar.php">← Voltar ao Acompanhamento</a>
         <?php endif; ?>
     </div>
+
+    <script>
+        function copiarChave() {
+            const chaveElement = document.getElementById('pix-key');
+            const chaveTexto = chaveElement.textContent || chaveElement.innerText;
+
+            navigator.clipboard.writeText(chaveTexto).then(function() {
+                alert('Chave Pix copiada para a área de transferência!');
+            }).catch(function(err) {
+                // Fallback para navegadores antigos
+                const textArea = document.createElement("textarea");
+                textArea.value = chaveTexto;
+                document.body.appendChild(textArea);
+                textArea.select();
+                document.execCommand('copy');
+                document.body.removeChild(textArea);
+                alert('Chave Pix copiada para a área de transferência!');
+            });
+        }
+    </script>
 </body>
 </html>
