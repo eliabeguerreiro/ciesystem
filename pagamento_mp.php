@@ -10,9 +10,9 @@ use MercadoPago\MercadoPagoConfig;
 use MercadoPago\Exceptions\MPApiException;
 
 // Inclui as dependências do sistema
-require_once __DIR__ . '/../app/config/database.php';
-require_once __DIR__ . '/../app/models/Estudante.php';
-require_once __DIR__ . '/../app/models/Inscricao.php';
+require_once __DIR__ . '../app/config/database.php';
+require_once __DIR__ . '../app/models/Estudante.php';
+require_once __DIR__ . '../app/models/Inscricao.php';
 
 // Configura o SDK do Mercado Pago
 MercadoPagoConfig::setAccessToken(MERCADOPAGO_ACCESS_TOKEN);
