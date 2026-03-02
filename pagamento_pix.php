@@ -1,9 +1,9 @@
 <?php
 // Inclui a configuração da API
-require_once __DIR__ . '/../app/config/abacatepay_config.php';
-require_once __DIR__ . '/../app/config/database.php';
-require_once __DIR__ . '/../app/models/Estudante.php';
-require_once __DIR__ . '/../app/models/Inscricao.php';
+require_once __DIR__ . '../app/config/abacatepay_config.php';
+require_once __DIR__ . '../app/config/database.php';
+require_once __DIR__ . '../app/models/Estudante.php';
+require_once __DIR__ . '../app/models/Inscricao.php';
 
 $database = new Database();
 $db = $database->getConnection();
@@ -73,9 +73,15 @@ if ($resultado && empty($erro)) {
         'Authorization: Bearer ' . $apiKey
     ]);
 
-    $response = curl_exec($curl);
-    $httpCode = curl_getinfo($curl, CURLINFO_HTTP_CODE);
-    curl_close($curl);
+$response = curl_exec($curl);
+$httpCode = curl_getinfo($curl, CURLINFO_HTTP_CODE);
+try {
+    curl_close($curl); // <-- Chamada encapsulada para evitar o aviso
+} catch (\Error $e) {
+    // Opcional: Log do erro se necessário
+    error_log("Erro ao fechar cURL em pagamento_pix.php: " . $e->getMessage());
+}
+// 
 
     if ($httpCode === 200) {
         $pixResponse = json_decode($response, true);

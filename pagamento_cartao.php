@@ -1,9 +1,9 @@
 <?php
 // Inclui a configuração da API
-require_once __DIR__ . '/../app/config/abacatepay_config.php';
-require_once __DIR__ . '/../app/config/database.php';
-require_once __DIR__ . '/../app/models/Estudante.php';
-require_once __DIR__ . '/../app/models/Inscricao.php';
+require_once __DIR__ . '../app/config/abacatepay_config.php';
+require_once __DIR__ . '../app/config/database.php';
+require_once __DIR__ . '../app/models/Estudante.php';
+require_once __DIR__ . '../app/models/Inscricao.php';
 
 $database = new Database();
 $db = $database->getConnection();
