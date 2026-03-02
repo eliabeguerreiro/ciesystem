@@ -18,10 +18,24 @@ $valor = VALOR_PAGAMENTO_CIE; // Usa a constante definida no config
 // ================================
 // VALIDAÇÃO DOS DADOS DE ENTRADA
 // ================================
-$codigo = trim($_GET['codigo'] ?? '');
-$dataNascimento = $_GET['data_nascimento'] ?? '';
 
-if (!empty($codigo) && !empty($dataNascimento)) {
+$codigo = trim($_GET['codigo'] ?? '');
+$dataNascimento = trim($_GET['data_nascimento'] ?? ''); // Adicionado trim aqui também
+
+// Função simples para validar formato de data (AAAA-MM-DD)
+function dataValida($data) {
+    return preg_match('/^\d{4}-\d{2}-\d{2}$/', $data);
+}
+
+// --- DEBUG: Imprime os valores recebidos ---
+// Remova ou comente estas linhas após a depuração
+error_log("DEBUG pagamento_pix.php - Codigo recebido: '" . $codigo . "'");
+error_log("DEBUG pagamento_pix.php - Data Nascimento recebida: '" . $dataNascimento . "'");
+error_log("DEBUG pagamento_pix.php - dataValida(\$dataNascimento): " . (dataValida($dataNascimento) ? 'true' : 'false'));
+// --- FIM DEBUG ---
+
+if (!empty($codigo) && !empty($dataNascimento) && dataValida($dataNascimento)) {
+    // Busca por código de inscrição e data de nascimento (mesma lógica de acompanhar.php)
     $query = "SELECT i.*, e.nome, e.matricula, e.data_nascimento as estudante_data_nascimento, e.email, e.cpf
               FROM inscricoes i
               INNER JOIN estudantes e ON i.estudante_id = e.id
@@ -35,67 +49,74 @@ if (!empty($codigo) && !empty($dataNascimento)) {
 
     if (!$resultado) {
         $erro = "Inscrição não encontrada ou dados incorretos.";
-    } elseif ($resultado['pagamento_confirmado']) {
+    } elseif (!empty($resultado['pagamento_confirmado'])) {
         $erro = "Pagamento já foi confirmado para esta inscrição.";
     }
+    // Nenhuma verificação de status é feita aqui, conforme regra final.
 } else {
-    $erro = "Dados de inscrição incompletos.";
+    $erro = "Dados de inscrição incompletos ou data de nascimento inválida.";
 }
 
 if ($resultado && empty($erro)) {
-    $descricao = "CIE 2026 - {$resultado['nome']}"; // Descrição curta (max 37 chars?)
-    $cpf = preg_replace('/[^0-9]/', '', $resultado['cpf'] ?? ''); // Limpa CPF
-
-    // ================================
-    // INTEGRACAO COM ABACATEPAY (PIX QR CODE)
-    // ================================
-    $urlAbacatePay = ABACATEPAY_API_BASE_URL . '/pixQrCode/create'; // Endpoint para criar PIX
-    $apiKey = ABACATEPAY_API_KEY;
-
-    $payload = [
-        "amount" => (int)($valor * 100), // Valor em centavos (25.00 -> 2500)
-        "description" => $descricao,
-        "expiresIn" => 3600, // Expira em 1 hora (em segundos)
-        // "customer" => [ // Opcional, talvez não seja necessário para PIX direto
-        //     "name" => $resultado['nome'],
-        //     "email" => $resultado['email'] ?? '',
-        //     "taxId" => $cpf, // CPF ou CNPJ
-        //     "cellphone" => "" // Opcional
-        // ]
-    ];
-
-    $curl = curl_init($urlAbacatePay);
-    curl_setopt($curl, CURLOPT_RETURNTRANSFER, true);
-    curl_setopt($curl, CURLOPT_POST, true);
-    curl_setopt($curl, CURLOPT_POSTFIELDS, json_encode($payload));
-    curl_setopt($curl, CURLOPT_HTTPHEADER, [
-        'Content-Type: application/json',
-        'Authorization: Bearer ' . $apiKey
-    ]);
-
-$response = curl_exec($curl);
-$httpCode = curl_getinfo($curl, CURLINFO_HTTP_CODE);
-try {
-    curl_close($curl); // <-- Chamada encapsulada para evitar o aviso
-} catch (\Error $e) {
-    // Opcional: Log do erro se necessário
-    error_log("Erro ao fechar cURL em pagamento_pix.php: " . $e->getMessage());
-}
-// 
-
-    if ($httpCode === 200) {
-        $pixResponse = json_decode($response, true);
-        if ($pixResponse && isset($pixResponse['data']['brCode'], $pixResponse['data']['brCodeBase64'])) {
-            $brCode = $pixResponse['data']['brCode'];
-            $brCodeBase64 = $pixResponse['data']['brCodeBase64'];
-            // QR Code e chave copia-e-cola obtidos com sucesso
-        } else {
-            $erro = "Erro: API da AbacatePay não retornou QR Code ou chave copia-e-cola (dados ausentes).";
-            error_log("Erro PIX API: " . print_r($pixResponse, true)); // Log para debug
-        }
+    // Verificar se os campos necessários existem no array $resultado
+    if (!isset($resultado['nome'], $resultado['cpf'])) {
+        $erro = "Dados do estudante incompletos para gerar o pagamento.";
     } else {
-        $erro = "Erro na comunicação com a AbacatePay (HTTP {$httpCode}): " . $response;
-        error_log("Erro PIX API HTTP: " . $response); // Log para debug
+        $descricao = "CIE 2026 - {$resultado['nome']}"; // Descrição curta (max 37 chars?)
+        $cpf = preg_replace('/[^0-9]/', '', $resultado['cpf'] ?? ''); // Limpa CPF
+
+        // ================================
+        // INTEGRACAO COM ABACATEPAY (PIX QR CODE)
+        // ================================
+        $urlAbacatePay = ABACATEPAY_API_BASE_URL . '/pixQrCode/create'; // Endpoint para criar PIX
+        $apiKey = ABACATEPAY_API_KEY;
+
+        $payload = [
+            "amount" => (int)($valor * 100), // Valor em centavos (25.00 -> 2500)
+            "description" => $descricao,
+            "expiresIn" => 3600, // Expira em 1 hora (em segundos)
+            // "customer" => [ // Opcional, talvez não seja necessário para PIX direto
+            //     "name" => $resultado['nome'],
+            //     "email" => $resultado['email'] ?? '',
+            //     "taxId" => $cpf, // CPF ou CNPJ
+            //     "cellphone" => "" // Opcional
+            // ]
+        ];
+
+        $curl = curl_init($urlAbacatePay);
+        curl_setopt($curl, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($curl, CURLOPT_POST, true);
+        curl_setopt($curl, CURLOPT_POSTFIELDS, json_encode($payload));
+        curl_setopt($curl, CURLOPT_HTTPHEADER, [
+            'Content-Type: application/json',
+            'Authorization: Bearer ' . $apiKey
+        ]);
+
+        $response = curl_exec($curl);
+        $httpCode = curl_getinfo($curl, CURLINFO_HTTP_CODE); // Captura o HTTP code ANTES de fechar a conexão
+
+        // Tenta fechar a conexão de forma compatível com versões anteriores e posteriores ao PHP 8.5
+        try {
+            curl_close($curl);
+        } catch (\Error $e) {
+            // Opcional: Log do erro se necessário
+            error_log("Erro ao fechar cURL em pagamento_pix.php: " . $e->getMessage());
+        }
+
+        if ($httpCode === 200) {
+            $pixResponse = json_decode($response, true);
+            if ($pixResponse && isset($pixResponse['data']['brCode'], $pixResponse['data']['brCodeBase64'])) {
+                $brCode = $pixResponse['data']['brCode'];
+                $brCodeBase64 = $pixResponse['data']['brCodeBase64'];
+                // QR Code e chave copia-e-cola obtidos com sucesso
+            } else {
+                $erro = "Erro: API da AbacatePay não retornou QR Code ou chave copia-e-cola (dados ausentes).";
+                error_log("Erro PIX API: " . print_r($pixResponse, true)); // Log para debug
+            }
+        } else {
+            $erro = "Erro na comunicação com a AbacatePay (HTTP {$httpCode}): " . $response;
+            error_log("Erro PIX API HTTP: " . $response); // Log para debug
+        }
     }
 }
 ?>
@@ -112,7 +133,7 @@ try {
         .info-box { background: #e8f5e9; padding: 15px; border-radius: 6px; margin-bottom: 20px; }
         .qrcode-container { text-align: center; margin: 20px 0; }
         .qrcode-img { max-width: 200px; max-height: 200px; border: 1px solid #ddd; padding: 5px; background: white; }
-        .pix-text { background: #f5f5f5; padding: 10px; border-radius: 4px; font-family: monospace; word-break: break-all; margin: 10px 0; }
+        .pix-text { background: #f5f5f5; padding: 10px; border-radius: 4px; font-family word-break: break-all; margin: 10px 0; }
         .copy-btn { background: #1976d2; color: white; border: none; padding: 8px 16px; cursor: pointer; border-radius: 4px; }
         .copy-btn:hover { background: #1565c0; }
         .status-pendente { color: #f57c00; font-weight: bold; }
@@ -135,7 +156,7 @@ try {
                 <p><strong>Matrícula:</strong> <?= htmlspecialchars($resultado['matricula']) ?></p>
                 <p><strong>Status Atual:</strong> <span class="status-pendente"><?= ucfirst(str_replace('_', ' ', $resultado['situacao'])) ?></span></p>
                 <p><strong>Valor a Pagar:</strong> R$ <?= number_format($valor, 2, ',', '.') ?></p>
-                <p><strong>Descrição:</strong> <?= htmlspecialchars($descricao) ?></p>
+                <p><strong>Descrição:</strong> <?= htmlspecialchars($descricao ?? 'N/A') ?></p> <!-- Exibe descricao ou N/A -->
             </div>
 
             <?php if ($brCodeBase64 && $brCode): ?>
