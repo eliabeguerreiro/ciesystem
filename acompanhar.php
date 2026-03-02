@@ -196,7 +196,7 @@ if ($_POST) {
 
             <!-- Botão de Pagamento (Regra Final: Disponível sempre que a inscrição existir e o pagamento não for confirmado) -->
             <?php if (!$resultado['pagamento_confirmado'] && $resultado['situacao'] !== 'pago' && $resultado['situacao'] !== 'cie_emitida_aguardando_entrega' && $resultado['situacao'] !== 'cie_entregue_na_instituicao'): ?>
-                <a href="pagamento.php?codigo=<?= urlencode($resultado['codigo_inscricao']) ?>&data_nascimento=<?= urlencode($resultado['data_nascimento']) ?>" class="btn-pagamento">Realizar Pagamento</a>
+                <a href="pagamento_mp.php?codigo=<?= urlencode($resultado['codigo_inscricao']) ?>&data_nascimento=<?= urlencode($resultado['data_nascimento']) ?>" class="btn-pagamento">Realizar Pagamento</a>
             <?php elseif ($resultado['pagamento_confirmado'] && in_array($resultado['situacao'], ['aguardando_validacao', 'dados_aprovados', 'pagamento_pendente', 'documentos_anexados'])): ?>
                 <p style="color:#2e7d32;">Pagamento confirmado. Aguarde a atualização automática do status da inscrição.</p>
             <?php endif; ?>
