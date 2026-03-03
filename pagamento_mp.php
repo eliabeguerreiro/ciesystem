@@ -16,8 +16,9 @@ require_once __DIR__ . '../app/models/Inscricao.php';
 
 // Configura o SDK do Mercado Pago
 MercadoPagoConfig::setAccessToken(MERCADOPAGO_ACCESS_TOKEN);
+
 // Opcional: Definir ambiente de runtime (LOCAL para testes locais, SERVER para produção)
-// MercadoPagoConfig::setRuntimeEnviroment(MercadoPagoConfig::LOCAL);
+// MercadoPagoConfig::setRuntimeEnvironment(MercadoPagoConfig::LOCAL);
 
 $database = new Database();
 $db = $database->getConnection();
