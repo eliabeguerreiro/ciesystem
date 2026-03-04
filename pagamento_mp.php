@@ -61,7 +61,7 @@ if ($resultado && empty($erro)) {
     // ================================
     // VALOR DO PAGAMENTO (FIXO OU DINÂMICO)
     // ================================
-    $valor = 25.00; // Exemplo: R$ 25,00
+    $valor = 1.00; // Exemplo: R$ 25,00
     $descricao = "Pagamento anuidade CIE - Inscrição: {$resultado['codigo_inscricao']} - {$resultado['nome']}";
 
     // ================================
@@ -89,11 +89,14 @@ if ($resultado && empty($erro)) {
         // "address" => [...], // Opcional
     ];
 
-    // URLs de retorno após o pagamento
+    // URLs de retorno após o pagamento (Importante: são URLs para onde o USUÁRIO é redirecionado)
+    // Estas URLs devem apontar para páginas que o usuário veja (ex: success.html, failure.html)
+    // Para testes locais, use localhost com protocolo.
+    $baseUrl = 'http://localhost/ciesytem'; // Ajuste para seu domínio real em produção
     $backUrls = [
-        "success" => "localhost/ciesytem/webhook_mp.php", // Substitua pelo seu endpoint
-        "failure" => "localhost/ciesytem/webhook_mp.php",   // Substitua pelo seu endpoint
-        "pending" => "localhost/ciesytem/webhook_mp.php" // Substitua pelo seu endpoint
+        "success" => $baseUrl . "/retorno_sucesso.php", // Página para sucesso
+        "failure" => $baseUrl . "/retorno_falha.php",   // Página para falha
+        "pending" => $baseUrl . "/retorno_pendente.php" // Página para pendente
     ];
 
     // Configurações da preferência
@@ -101,8 +104,8 @@ if ($resultado && empty($erro)) {
         "items" => $items,
         "payer" => $payer,
         "back_urls" => $backUrls,
-        "auto_return" => "approved", // Redireciona automaticamente após aprovação
-        "notification_url" => "https://seudominio.com/webhook_mp.php", // URL do seu webhook (substitua!)
+        "auto_return" => "approved", // Redireciona automaticamente após aprovação para success
+        "notification_url" => $baseUrl . "/webhook_mp.php", // URL do seu webhook (onde o MP envia notificações)
         "external_reference" => $resultado['codigo_inscricao'], // ID único da inscrição para vincular o pagamento
         "statement_descriptor" => "CIE 2026", // Nome que aparecerá na fatura do cartão
     ];
@@ -169,3 +172,4 @@ if ($resultado && empty($erro)) {
     </div>
 </body>
 </html>
+
