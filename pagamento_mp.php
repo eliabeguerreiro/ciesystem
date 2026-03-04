@@ -91,9 +91,9 @@ if ($resultado && empty($erro)) {
 
     // URLs de retorno após o pagamento
     $backUrls = [
-        "success" => "https://seudominio.com/retorno_sucesso.php", // Substitua pelo seu endpoint
-        "failure" => "https://seudominio.com/retorno_falha.php",   // Substitua pelo seu endpoint
-        "pending" => "https://seudominio.com/retorno_pendente.php" // Substitua pelo seu endpoint
+        "success" => "localhost/ciesytem/webhook_mp.php", // Substitua pelo seu endpoint
+        "failure" => "localhost/ciesytem/webhook_mp.php",   // Substitua pelo seu endpoint
+        "pending" => "localhost/ciesytem/webhook_mp.php" // Substitua pelo seu endpoint
     ];
 
     // Configurações da preferência
