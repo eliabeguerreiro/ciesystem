@@ -1,24 +1,34 @@
 <?php
-// Inclui a configuração do gateway de pagamento (contendo as credenciais do Mercado Pago)
-require_once __DIR__ . '../app/config/payment_gateway_config.php';
-
-// Inclui as dependências do Composer (SDK do Mercado Pago)
-require_once __DIR__ . '../vendor/autoload.php';
-
+// --- PASSO 1: Declarações 'use' (logo após <?php e antes de qualquer código executável) ---
 use MercadoPago\Client\Preference\PreferenceClient;
 use MercadoPago\MercadoPagoConfig;
 use MercadoPago\Exceptions\MPApiException;
 
-// Inclui as dependências do sistema
+// --- PASSO 2: Inclui as dependências do Composer (SDK do Mercado Pago) ---
+// Caminho relativo a partir de public/pagamento_mp.php -> ciesytem/public/../vendor/autoload.php
+require_once __DIR__ . '../vendor/autoload.php';
+
+// --- PASSO 3: Inclui a configuração do gateway de pagamento (contendo as credenciais do Mercado Pago) ---
+// Caminho relativo a partir de public/pagamento_mp.php -> ciesytem/public/../app/config/payment_gateway_config.php
+require_once __DIR__ . '../app/config/payment_gateway_config.php';
+
+// --- PASSO 4: Inclui as dependências do sistema ---
+// Caminhos relativos a partir de public/pagamento_mp.php -> ciesytem/public/../app/models/
 require_once __DIR__ . '../app/config/database.php';
 require_once __DIR__ . '../app/models/Estudante.php';
 require_once __DIR__ . '../app/models/Inscricao.php';
 
-// Configura o SDK do Mercado Pago
+// --- PASSO 5: Configura o SDK do Mercado Pago ---
+// Certifique-se de que MERCADOPAGO_ACCESS_TOKEN esteja definida no payment_gateway_config.php
+if (!defined('MERCADOPAGO_ACCESS_TOKEN') || empty(MERCADOPAGO_ACCESS_TOKEN)) {
+    die("Erro Crítico: MERCADOPAGO_ACCESS_TOKEN não está definida ou está vazia em payment_gateway_config.php.");
+}
 MercadoPagoConfig::setAccessToken(MERCADOPAGO_ACCESS_TOKEN);
 
 // Opcional: Definir ambiente de runtime (LOCAL para testes locais, SERVER para produção)
-// MercadoPagoConfig::setRuntimeEnvironment(MercadoPagoConfig::LOCAL);
+// Para testes: MercadoPagoConfig::setRuntimeEnviroment(MercadoPagoConfig::LOCAL);
+// Para produção: Comente ou remova a linha abaixo
+// MercadoPagoConfig::setRuntimeEnviroment(MercadoPagoConfig::SERVER); // Padrão é SERVER
 
 $database = new Database();
 $db = $database->getConnection();
@@ -35,7 +45,7 @@ $codigo = trim($_GET['codigo'] ?? '');
 $dataNascimento = $_GET['data_nascimento'] ?? '';
 
 if (!empty($codigo) && !empty($dataNascimento)) {
-    // Busca por código de inscrição e data de nascimento
+    // Busca por código de inscrição e data de nascimento (mesma lógica de acompanhar.php)
     $query = "SELECT i.*, e.nome, e.matricula, e.data_nascimento as estudante_data_nascimento, e.email
               FROM inscricoes i
               INNER JOIN estudantes e ON i.estudante_id = e.id
@@ -61,7 +71,7 @@ if ($resultado && empty($erro)) {
     // ================================
     // VALOR DO PAGAMENTO (FIXO OU DINÂMICO)
     // ================================
-    $valor = 1.00; // Exemplo: R$ 25,00
+    $valor = 25.00; // Exemplo: R$ 25,00
     $descricao = "Pagamento anuidade CIE - Inscrição: {$resultado['codigo_inscricao']} - {$resultado['nome']}";
 
     // ================================
@@ -89,22 +99,20 @@ if ($resultado && empty($erro)) {
         // "address" => [...], // Opcional
     ];
 
-    // URLs de retorno após o pagamento (Importante: são URLs para onde o USUÁRIO é redirecionado)
-    // Estas URLs devem apontar para páginas que o usuário veja (ex: success.html, failure.html)
-    // Para testes locais, use localhost com protocolo.
-    $baseUrl = 'http://localhost/ciesytem'; // Ajuste para seu domínio real em produção
+    // URLs de retorno após o pagamento (IMPORTANTE: Devem ser URLs completas!)
+    // Estas URLs são para onde o *usuário* é redirecionado após finalizar o pagamento no checkout do MP.
+    // Substitua 'seudominio.com' pelo seu domínio real (ex: 'localhost/ciesytem' para testes locais).
     $backUrls = [
-        "success" => $baseUrl . "/retorno_sucesso.php", // Página para sucesso
-        "failure" => $baseUrl . "/retorno_falha.php",   // Página para falha
-        "pending" => $baseUrl . "/retorno_pendente.php" // Página para pendente
+        "success" => "https://seudominio.com/retorno_sucesso.php", // Substitua pelo seu endpoint
+        "failure" => "https://seudominio.com/retorno_falha.php",   // Substitua pelo seu endpoint
+        "pending" => "https://seudominio.com/retorno_pendente.php" // Substitua pelo seu endpoint
     ];
-
     // Configurações da preferência
     $request = [
         "items" => $items,
         "payer" => $payer,
         "back_urls" => $backUrls,
-        "auto_return" => "approved", // Redireciona automaticamente após aprovação para success
+        "auto_return" => "approved", // Redireciona automaticamente após aprovação para 'success'
         "notification_url" => $baseUrl . "/webhook_mp.php", // URL do seu webhook (onde o MP envia notificações)
         "external_reference" => $resultado['codigo_inscricao'], // ID único da inscrição para vincular o pagamento
         "statement_descriptor" => "CIE 2026", // Nome que aparecerá na fatura do cartão
@@ -120,10 +128,37 @@ if ($resultado && empty($erro)) {
             exit; // Encerra o script após o redirect
         } else {
             $erro = "Erro ao criar preferência de pagamento no Mercado Pago (sem init_point).";
+            error_log("Erro MP (pagamento_mp.php): Preferência criada, mas init_point ausente. Dados: " . print_r($preference, true));
         }
     } catch (MPApiException $e) {
-        $erro = "Erro na API do Mercado Pago: " . $e->getMessage();
-        error_log("Erro MP API (pagamento_mp.php): " . $e->getMessage()); // Log para debug
+        // Captura a resposta bruta da API do Mercado Pago
+        $apiResponse = $e->getApiResponse();
+        $statusCode = $apiResponse->getStatusCode();
+        $content = $apiResponse->getContent(); // Este é o JSON de erro que você precisa ver!
+
+        // Monta uma mensagem de erro detalhada
+        $erro = "Erro na API do Mercado Pago (Status {$statusCode}): ";
+        $erro .= json_encode($content, JSON_PRETTY_PRINT); // Formata o JSON para facilitar a leitura
+
+        // Log detalhado no arquivo de erro do PHP
+        error_log("=== ERRO MERCADO PAGO - DETALHES ===");
+        error_log("Status Code: " . $statusCode);
+        error_log("Resposta Bruta: " . print_r($content, true));
+        error_log("Mensagem do SDK: " . $e->getMessage());
+        error_log("Request Enviado: " . print_r($request, true)); // Log do request enviado
+        error_log("Token usado (últimos 5 chars): " . substr(MERCADOPAGO_ACCESS_TOKEN, -5)); // Verifica se o token é o esperado
+        error_log("=== FIM ERRO ===");
+
+        // Exibe o erro na tela para depuração (só em ambiente local!)
+        // NUNCA FAÇA ISSO EM PRODUÇÃO!
+        if (strpos($_SERVER['HTTP_HOST'], 'localhost') !== false || $_SERVER['REMOTE_ADDR'] === '127.0.0.1') {
+            echo "<h3>Erro ao se comunicar com o Mercado Pago:</h3>";
+            echo "<pre style='background-color: #f8d7da; padding: 10px; border: 1px solid #f5c6cb; white-space: pre-wrap;'>";
+            echo "Status HTTP: " . htmlspecialchars($statusCode) . "\n\n";
+            echo "Detalhes do Erro:\n" . htmlspecialchars($erro) . "\n\n";
+            echo "</pre>";
+            echo "<p>Verifique o log do PHP para mais detalhes.</p>";
+        }
     } catch (Exception $e) {
         $erro = "Erro geral: " . $e->getMessage();
         error_log("Erro Geral (pagamento_mp.php): " . $e->getMessage()); // Log para debug
@@ -172,4 +207,3 @@ if ($resultado && empty($erro)) {
     </div>
 </body>
 </html>
-
