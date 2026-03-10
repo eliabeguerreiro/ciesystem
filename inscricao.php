@@ -1,4 +1,10 @@
 <?php
+// === DEBUG - HABILITAR ERROS EM TELA ===
+ini_set('display_errors', 1);
+ini_set('display_startup_errors', 1);
+error_reporting(E_ALL);
+// ========================================
+
 // Sem sessão, sem autenticação — acesso público
 require_once __DIR__ . '/app/config/database.php';
 require_once __DIR__ . '/app/models/Estudante.php';
@@ -6,9 +12,15 @@ require_once __DIR__ . '/app/models/Inscricao.php';
 require_once __DIR__ . '/app/controllers/EstudanteController.php';
 require_once __DIR__ . '/app/models/DocumentoEstudante.php'; 
 require_once __DIR__ . '/app/models/Instituicao.php';
+require_once __DIR__ . '/app/models/Log.php';
 
 $database = new Database();
 $db = $database->getConnection();
+
+// ✅ Verificar conexão com banco
+if (!$db) {
+    die("Erro: Não foi possível conectar ao banco de dados.");
+}
 
 $estudanteModel = new Estudante($db);
 $inscricaoModel = new Inscricao($db);
@@ -25,18 +37,26 @@ $codigoGerado = '';
 // ================================
 if ($_POST) {
     
+    // ✅ Log do que está chegando
+    error_log("=== INÍCIO DO POST ===");
+    error_log("POST: " . print_r($_POST, true));
+    error_log("FILES: " . print_r($_FILES, true));
+    error_log("=== FIM DO POST ===");
+    
     $camposObrigatorios = ['nome', 'data_nascimento', 'cpf', 'documento_tipo', 'documento_numero',
                           'instituicao_id', 'curso', 'nivel', 'matricula'];
     foreach ($camposObrigatorios as $campo) {
         if (empty($_POST[$campo])) {
             $erro = "O campo '$campo' é obrigatório.";
+            error_log("ERRO: Campo obrigatório vazio: $campo");
             break;
         }
     }
 
     // Verifica se comprovante de matrícula foi enviado
-    if (empty($_FILES['comprovante_matricula']['name'])) {
+    if (empty($erro) && empty($_FILES['comprovante_matricula']['name'])) {
         $erro = "Comprovante de matrícula é obrigatório.";
+        error_log("ERRO: Comprovante de matrícula não enviado");
     }
 
     // Verifica se documentos de identidade (frente e verso) e o tipo foram enviados
@@ -45,36 +65,52 @@ if ($_POST) {
     $docFrente = $_FILES['doc_identidade_frente'] ?? null;
     $docVerso = $_FILES['doc_identidade_verso'] ?? null;
 
-    if (!$tipoDocIdentidade || empty($docFrente['name']) || empty($docVerso['name'])) {
+    if (empty($erro) && (!$tipoDocIdentidade || empty($docFrente['name']) || empty($docVerso['name']))) {
          $erro = "É obrigatório selecionar o tipo e anexar ambos os arquivos: Frente e Verso do Documento de Identificação.";
+         error_log("ERRO: Documentos de identidade incompletos");
     }
 
     // Validação do tipo de documento
-    $tiposValidos = ['rg', 'cnh', 'passaporte', 'cpf'];
-    if ($tipoDocIdentidade && !in_array(strtolower($tipoDocIdentidade), $tiposValidos)) {
-         $erro = "Tipo de documento de identidade inválido.";
+    if (empty($erro)) {
+        $tiposValidos = ['rg', 'cnh', 'passaporte', 'cpf'];
+        if ($tipoDocIdentidade && !in_array(strtolower($tipoDocIdentidade), $tiposValidos)) {
+             $erro = "Tipo de documento de identidade inválido.";
+             error_log("ERRO: Tipo de documento inválido: $tipoDocIdentidade");
+        }
     }
 
-    // ✅ CORREÇÃO: Validação da foto 3x4 antes do processamento
-    if (isset($_FILES['foto']) && $_FILES['foto']['error'] === UPLOAD_ERR_OK && !empty($_FILES['foto']['name'])) {
+    // ✅ Validação da foto 3x4 antes do processamento
+    if (empty($erro) && isset($_FILES['foto']) && $_FILES['foto']['error'] === UPLOAD_ERR_OK && !empty($_FILES['foto']['name'])) {
         $allowed = ['jpg', 'jpeg', 'png'];
         $ext = strtolower(pathinfo($_FILES['foto']['name'], PATHINFO_EXTENSION));
         if (!in_array($ext, $allowed)) {
             $erro = "Formato de foto inválido. Use JPG ou PNG.";
+            error_log("ERRO: Formato de foto inválido: $ext");
+        }
+    }
+
+    // ✅ Verificar erros de upload
+    if (empty($erro)) {
+        $arquivosUpload = ['comprovante_matricula', 'doc_identidade_frente', 'doc_identidade_verso', 'foto'];
+        foreach ($arquivosUpload as $arq) {
+            if (isset($_FILES[$arq]) && $_FILES[$arq]['error'] !== UPLOAD_ERR_OK && $_FILES[$arq]['error'] !== UPLOAD_ERR_NO_FILE) {
+                $erro = "Erro no upload do arquivo '$arq'. Código: " . $_FILES[$arq]['error'];
+                error_log("ERRO UPLOAD: $arq - Código: " . $_FILES[$arq]['error']);
+                break;
+            }
         }
     }
 
     if (empty($erro)) {
-        // Verifica se CPF ou matrícula já existem
-        $stmt = $db->prepare("SELECT id FROM estudantes WHERE cpf = ? OR matricula = ?");
-        $stmt->execute([$_POST['cpf'], $_POST['matricula']]);
-        if ($stmt->fetch()) {
-            $erro = "CPF ou matrícula já cadastrados. Entre em contato com a administração.";
-        } else {
-            // ✅ CORREÇÃO: Removido upload via EstudanteController
-            // A foto será processada junto com os demais documentos
-            
-            if (empty($erro)) {
+        try {
+            // Verifica se CPF ou matrícula já existem
+            $stmt = $db->prepare("SELECT id FROM estudantes WHERE cpf = ? OR matricula = ?");
+            $stmt->execute([$_POST['cpf'], $_POST['matricula']]);
+            if ($stmt->fetch()) {
+                $erro = "CPF ou matrícula já cadastrados. Entre em contato com a administração.";
+                error_log("ERRO: CPF ou matrícula duplicados");
+            } else {
+                
                 // Cria estudante
                 $estudante = new Estudante($db);
                 $estudante->nome = $_POST['nome'];
@@ -95,62 +131,102 @@ if ($_POST) {
 
                 if ($estudante->criar()) {
                     $estudanteId = $db->lastInsertId();
+                    error_log("Estudante criado com ID: $estudanteId");
 
-                    // Cria inscrição
-                    $inscricao = new Inscricao($db);
-                    $inscricao->estudante_id = $estudanteId;
-                    $inscricao->origem = 'estudante';
-                    $inscricao->criar();
-
-                    // Obter ID da inscrição
-                    $stmt = $db->prepare("SELECT id, codigo_inscricao FROM inscricoes WHERE estudante_id = ? ORDER BY id DESC LIMIT 1");
-                    $stmt->execute([$estudanteId]);
-                    $resultado = $stmt->fetch();
-                    if ($resultado) {
-                        $inscricaoId = $resultado['id'];
-                        $codigoGerado = $resultado['codigo_inscricao'];
-
-                        // ✅ CORREÇÃO: Salvar Foto 3x4 como documento anexado à inscrição (unificado)
-                        if (isset($_FILES['foto']) && $_FILES['foto']['error'] === UPLOAD_ERR_OK && !empty($_FILES['foto']['name'])) {
-                            if (!$docIdentidadeModel->salvarUnicoArquivo($estudanteId, $_FILES['foto'], 'foto_3x4', 'pendente')) {
-                                $erro = "Erro ao salvar a foto 3x4 como documento anexado à inscrição.";
-                            }
-                        }
-
-                        // Salvar comprovante de matrícula
-                        if (!empty($_FILES['comprovante_matricula']['name'])) {
-                            $inscTemp = new Inscricao($db);
-                            $inscTemp->id = $inscricaoId;
-                            $inscTemp->salvarDocumentos($_FILES['comprovante_matricula'], 'matricula');
-                        }
-
-                        // Salvar documentos de identidade (frente e verso) - OBRIGATÓRIO
-                        if ($tipoDocIdentidade && $docFrente && $docVerso) {
-                            if (!$docIdentidadeModel->salvarFrenteVerso($estudanteId, $docFrente, $docVerso, $tipoDocIdentidade, 'pendente')) {
-                                $erro = "Erro ao salvar os documentos de identidade (Frente e Verso).";
-                            } else {
-                                require_once __DIR__ . '/app/models/Log.php';
-                                $log = new Log($db);
-                                $log->registrar(
-                                    null,
-                                    'inscricao_publica_realizada',
-                                    "Estudante: {$estudante->nome}, CPF: {$estudante->cpf}, Código Inscrição: {$codigoGerado}",
-                                    $inscricaoId,
-                                    'inscricoes'
-                                );
-                                $sucesso = "Inscrição realizada com sucesso!";
-                            }
-                        } else {
-                            $erro = "Erro interno: Documentos de identidade não fornecidos.";
-                        }
-
+                    // ✅ Verificar se ID foi gerado
+                    if (!$estudanteId || $estudanteId <= 0) {
+                        $erro = "Erro: Não foi possível gerar ID do estudante.";
+                        error_log("ERRO: lastInsertId retornou: $estudanteId");
                     } else {
-                        $erro = "Erro ao gerar inscrição.";
+                        
+                        // Cria inscrição
+                        $inscricao = new Inscricao($db);
+                        $inscricao->estudante_id = $estudanteId;
+                        $inscricao->origem = 'estudante';
+                        
+                        if (!$inscricao->criar()) {
+                            $erro = "Erro ao criar inscrição.";
+                            error_log("ERRO: Falha ao criar inscrição");
+                        }
+
+                        if (empty($erro)) {
+                            // Obter ID da inscrição
+                            $stmt = $db->prepare("SELECT id, codigo_inscricao FROM inscricoes WHERE estudante_id = ? ORDER BY id DESC LIMIT 1");
+                            $stmt->execute([$estudanteId]);
+                            $resultado = $stmt->fetch();
+                            if ($resultado) {
+                                $inscricaoId = $resultado['id'];
+                                $codigoGerado = $resultado['codigo_inscricao'];
+                                error_log("Inscrição criada com ID: $inscricaoId, Código: $codigoGerado");
+
+                                // ✅ Verificar/Criar pasta de uploads
+                                $uploadDir = __DIR__ . '/uploads/';
+                                if (!is_dir($uploadDir)) {
+                                    if (!mkdir($uploadDir, 0755, true)) {
+                                        $erro = "Erro: Não foi possível criar pasta de uploads.";
+                                        error_log("ERRO: Falha ao criar pasta uploads: $uploadDir");
+                                    }
+                                }
+                                
+                                if (empty($erro) && !is_writable($uploadDir)) {
+                                    $erro = "Erro: Pasta de uploads sem permissão de escrita.";
+                                    error_log("ERRO: Pasta uploads sem permissão: $uploadDir");
+                                }
+
+                                // Salvar Foto 3x4
+                                if (empty($erro) && isset($_FILES['foto']) && $_FILES['foto']['error'] === UPLOAD_ERR_OK && !empty($_FILES['foto']['name'])) {
+                                    if (!$docIdentidadeModel->salvarUnicoArquivo($estudanteId, $_FILES['foto'], 'foto_3x4', 'pendente')) {
+                                        $erro = "Erro ao salvar a foto 3x4.";
+                                        error_log("ERRO: Falha ao salvar foto 3x4");
+                                    }
+                                }
+
+                                // Salvar comprovante de matrícula
+                                if (empty($erro) && !empty($_FILES['comprovante_matricula']['name'])) {
+                                    $inscTemp = new Inscricao($db);
+                                    $inscTemp->id = $inscricaoId;
+                                    if (!$inscTemp->salvarDocumentos($_FILES['comprovante_matricula'], 'matricula')) {
+                                        $erro = "Erro ao salvar comprovante de matrícula.";
+                                        error_log("ERRO: Falha ao salvar comprovante de matrícula");
+                                    }
+                                }
+
+                                // Salvar documentos de identidade (frente e verso) - OBRIGATÓRIO
+                                if (empty($erro) && $tipoDocIdentidade && $docFrente && $docVerso) {
+                                    if (!$docIdentidadeModel->salvarFrenteVerso($estudanteId, $docFrente, $docVerso, $tipoDocIdentidade, 'pendente')) {
+                                        $erro = "Erro ao salvar os documentos de identidade (Frente e Verso).";
+                                        error_log("ERRO: Falha ao salvar documentos de identidade");
+                                    } else {
+                                        $log = new Log($db);
+                                        $log->registrar(
+                                            null,
+                                            'inscricao_publica_realizada',
+                                            "Estudante: {$estudante->nome}, CPF: {$estudante->cpf}, Código Inscrição: {$codigoGerado}",
+                                            $inscricaoId,
+                                            'inscricoes'
+                                        );
+                                        $sucesso = "Inscrição realizada com sucesso!";
+                                        error_log("SUCESSO: Inscrição realizada - ID: $inscricaoId, Código: $codigoGerado");
+                                    }
+                                } elseif (empty($erro)) {
+                                    $erro = "Erro interno: Documentos de identidade não fornecidos.";
+                                    error_log("ERRO: Documentos de identidade não fornecidos");
+                                }
+
+                            } else {
+                                $erro = "Erro ao gerar inscrição.";
+                                error_log("ERRO: Não foi possível obter dados da inscrição criada");
+                            }
+                        }
                     }
                 } else {
                     $erro = "Erro ao cadastrar seus dados.";
+                    error_log("ERRO: Método criar() do Estudante retornou false");
                 }
             }
+        } catch (Exception $e) {
+            $erro = "Erro interno: " . $e->getMessage();
+            error_log("EXCEÇÃO: " . $e->getMessage() . " em " . $e->getFile() . ":" . $e->getLine());
         }
     }
 }
@@ -175,6 +251,7 @@ if ($_POST) {
         button:hover { background: #1565c0; }
         a { color: #1976d2; text-decoration: none; display: inline-block; margin-top: 20px; }
         a:hover { text-decoration: underline; }
+        .debug-info { background: #fff3e0; color: #e65100; padding: 10px; margin: 10px 0; border-radius: 4px; font-size: 0.85em; }
     </style>
 </head>
 <body>
@@ -191,6 +268,17 @@ if ($_POST) {
         <?php else: ?>
             <?php if ($erro): ?>
                 <div class="mensagem erro"><?= htmlspecialchars($erro) ?></div>
+            <?php endif; ?>
+
+            <!-- ✅ Debug info em desenvolvimento -->
+            <?php if (ini_get('display_errors') == 1): ?>
+                <div class="debug-info">
+                    <strong>Debug:</strong> 
+                    PHP Version: <?= phpversion() ?> | 
+                    Upload Max: <?= ini_get('upload_max_filesize') ?> | 
+                    Post Max: <?= ini_get('post_max_size') ?> |
+                    Upload Dir: <?= is_writable(__DIR__ . '/uploads/') ? 'OK' : 'SEM PERMISSÃO' ?>
+                </div>
             <?php endif; ?>
 
             <form method="POST" enctype="multipart/form-data">
