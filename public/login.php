@@ -1,7 +1,8 @@
 <?php
 session_start();
-require_once __DIR__ . '/../app/controllers/AuthController.php';
-require_once __DIR__ . '/../app/models/Log.php';
+
+require_once  '../app/controllers/AuthController.php';
+require_once  '../app/models/Log.php';
 
 $auth = new AuthController();
 $erro = '';
