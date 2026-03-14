@@ -50,244 +50,601 @@ if ($_POST) {
     }
 }
 ?>
-
 <!DOCTYPE html>
-<html>
+<html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>Acompanhar Inscrição</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Acompanhar Inscrição - CIE</title>
+    <!-- Fonte Google -->
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
     <style>
-        body { font-family: sans-serif; margin: 0; padding: 20px; background: #f9f9f9; }
-        .container { max-width: 800px; margin: 0 auto; background: white; padding: 30px; border-radius: 8px; }
-        h2 { color: #1976d2; text-align: center; margin-bottom: 30px; }
-        .form-group { margin-bottom: 15px; }
-        label { display: block; margin-bottom: 4px; font-weight: bold; }
-        input { width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; }
-        button { background: #1976d2; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; width: 100%; }
-        button:hover { background: #1565c0; }
-        .status-box { background: #f5f5f5; padding: 15px; border-radius: 6px; margin-top: 20px; }
-        .status-pendente,
-        .status-aguardando_validacao { color: #f57c00; }
-        .status-dados_aprovados { color: #f57c00; font-weight: bold; }
-        .status-pagamento_pendente { color: #f57c00; font-weight: bold; }
-        .status-documentos_anexados { color: #5d4037; font-weight: bold; }
-        .status-pago { color: #2e7d32; font-weight: bold; }
-        .status-cie_emitida_aguardando_entrega { color: #5d4037; font-weight: bold; }
-        .status-cie_entregue_na_instituicao { color: #2e7d32; font-weight: bold; }
-        a { color: #1976d2; text-decoration: none; display: inline-block; margin-top: 20px; }
-        a:hover { text-decoration: underline; }
-        .erro { background: #ffebee; color: #c62828; padding: 10px; border-radius: 4px; margin: 10px 0; }
-        table { width: 100%; border-collapse: collapse; background: white; margin-top: 20px; }
-        th, td { padding: 10px; text-align: left; border-bottom: 1px solid #eee; }
-        th { background: #f5f5f5; }
-        .status-invalido { color: #c62828; font-weight: bold; }
-        .btn-reenviar { background-color: #c62828; color: white; border: none; padding: 4px 8px; cursor: pointer; margin-left: 5px; }
-        .btn-reenviar:hover { background-color: #a51b1b; }
+        :root {
+            --primary-color: #1976d2;
+            --primary-dark: #1565c0;
+            --success-color: #2e7d32;
+            --warning-color: #f57c00;
+            --error-color: #c62828;
+            --info-color: #0288d1;
+            --bg-color: #f4f6f8;
+            --card-bg: #ffffff;
+            --text-color: #333;
+            --light-text: #666;
+            --border-color: #ddd;
+            --shadow: 0 4px 6px rgba(0,0,0,0.05);
+            --shadow-hover: 0 8px 15px rgba(0,0,0,0.1);
+        }
 
-        /* Estilo da Modal de Reenvio */
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: 'Roboto', sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            line-height: 1.6;
+            padding: 20px;
+        }
+
+        .main-container {
+            max-width: 900px;
+            margin: 40px auto;
+            background: var(--card-bg);
+            border-radius: 12px;
+            box-shadow: var(--shadow);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, var(--primary-color), var(--primary-dark));
+            color: white;
+            padding: 40px 20px;
+            text-align: center;
+        }
+
+        .header h2 {
+            font-size: 2rem;
+            margin-bottom: 10px;
+            font-weight: 700;
+        }
+
+        .header p {
+            font-size: 1.1rem;
+            opacity: 0.9;
+            font-weight: 300;
+        }
+
+        .content {
+            padding: 40px;
+        }
+
+        /* Formulário de Consulta */
+        .search-form {
+            max-width: 500px;
+            margin: 0 auto;
+            text-align: left;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            font-weight: 500;
+            margin-bottom: 8px;
+            color: var(--text-color);
+        }
+
+        input[type="text"],
+        input[type="date"] {
+            width: 100%;
+            padding: 12px 15px;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            font-size: 1rem;
+            transition: all 0.3s ease;
+            background-color: #fafafa;
+            font-family: inherit;
+        }
+
+        input:focus {
+            border-color: var(--primary-color);
+            outline: none;
+            box-shadow: 0 0 0 4px rgba(25, 118, 210, 0.15);
+            background-color: #fff;
+        }
+
+        .btn-submit {
+            display: block;
+            width: 100%;
+            padding: 14px;
+            background: var(--primary-color);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 1.1rem;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-top: 10px;
+            box-shadow: 0 4px 6px rgba(25, 118, 210, 0.2);
+        }
+
+        .btn-submit:hover {
+            background: var(--primary-dark);
+            transform: translateY(-2px);
+            box-shadow: 0 6px 12px rgba(25, 118, 210, 0.3);
+        }
+
+        /* Mensagens de Erro */
+        .erro {
+            background-color: #ffebee;
+            color: var(--error-color);
+            padding: 15px;
+            border-radius: 8px;
+            border-left: 5px solid var(--error-color);
+            margin-bottom: 25px;
+            animation: fadeIn 0.5s ease-in-out;
+        }
+
+        /* Card de Status */
+        .status-card {
+            background: #f9fbfd;
+            border: 1px solid #e3f2fd;
+            border-radius: 8px;
+            padding: 25px;
+            margin-bottom: 30px;
+            text-align: center;
+            animation: fadeInUp 0.6s ease-out;
+        }
+
+        .status-card h3 {
+            color: var(--primary-color);
+            margin-bottom: 15px;
+            font-size: 1.6rem;
+        }
+
+        .status-info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+            text-align: left;
+        }
+
+        .status-info-item strong {
+            display: block;
+            color: var(--light-text);
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 4px;
+        }
+
+        .status-info-item span {
+            font-size: 1.1rem;
+            font-weight: 500;
+            color: var(--text-color);
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 8px 16px;
+            border-radius: 50px;
+            font-weight: 700;
+            font-size: 1rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-top: 10px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        /* Cores de Status Dinâmicas */
+        .status-aguardando_validacao, .status-dados_aprovados, .status-pagamento_pendente {
+            background-color: #fff3e0; color: var(--warning-color); border: 1px solid #ffe0b2;
+        }
+        .status-documentos_anexados, .status-cie_emitida_aguardando_entrega {
+            background-color: #efebe9; color: #5d4037; border: 1px solid #d7ccc8;
+        }
+        .status-pago, .status-cie_entregue_na_instituicao {
+            background-color: #e8f5e9; color: var(--success-color); border: 1px solid #c8e6c9;
+        }
+
+        .status-message {
+            margin-top: 20px;
+            padding: 15px;
+            background: white;
+            border-radius: 6px;
+            border-left: 4px solid var(--primary-color);
+            color: var(--light-text);
+            font-style: italic;
+        }
+
+        /* Botão de Pagamento */
+        .btn-pagamento {
+            display: inline-block;
+            background: linear-gradient(135deg, var(--success-color), #1b5e20);
+            color: white;
+            padding: 14px 28px;
+            text-decoration: none;
+            border-radius: 8px;
+            font-weight: 700;
+            font-size: 1.1rem;
+            margin-top: 20px;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 6px rgba(46, 125, 50, 0.25);
+            text-transform: uppercase;
+        }
+
+        .btn-pagamento:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 8px 15px rgba(46, 125, 50, 0.35);
+            filter: brightness(1.1);
+        }
+
+        /* Tabela de Documentos */
+        .docs-section {
+            margin-top: 40px;
+            animation: fadeInUp 0.6s ease-out 0.2s backwards;
+        }
+
+        .docs-section h3 {
+            color: var(--primary-color);
+            margin-bottom: 20px;
+            font-size: 1.4rem;
+            border-bottom: 2px solid #f0f0f0;
+            padding-bottom: 10px;
+        }
+
+        .table-responsive {
+            overflow-x: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            background: white;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+
+        th, td {
+            padding: 15px;
+            text-align: left;
+            border-bottom: 1px solid #eee;
+        }
+
+        th {
+            background-color: #f8f9fa;
+            color: var(--light-text);
+            font-weight: 600;
+            text-transform: uppercase;
+            font-size: 0.85rem;
+            letter-spacing: 0.5px;
+        }
+
+        tr:last-child td { border-bottom: none; }
+        tr:hover { background-color: #fcfcfc; }
+
+        .doc-status-badge {
+            padding: 4px 10px;
+            border-radius: 4px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+        .status-validado { background-color: #e8f5e9; color: var(--success-color); }
+        .status-pendente { background-color: #fff3e0; color: var(--warning-color); }
+        .status-invalido { background-color: #ffebee; color: var(--error-color); }
+
+        .btn-ver {
+            color: var(--primary-color);
+            text-decoration: none;
+            font-weight: 500;
+            transition: color 0.3s;
+        }
+        .btn-ver:hover { color: var(--primary-dark); text-decoration: underline; }
+
+        .btn-reenviar {
+            background-color: var(--error-color);
+            color: white;
+            border: none;
+            padding: 6px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            font-weight: 500;
+            transition: background 0.3s;
+        }
+        .btn-reenviar:hover { background-color: #b71c1c; }
+
+        .back-link {
+            display: inline-block;
+            margin-top: 30px;
+            color: var(--light-text);
+            text-decoration: none;
+            font-weight: 500;
+            transition: color 0.3s;
+        }
+        .back-link:hover { color: var(--primary-color); }
+
+        /* Modal */
         .modal {
             display: none;
             position: fixed;
             z-index: 1000;
-            left: 0;
-            top: 0;
-            width: 100%;
-            height: 100%;
-            overflow: auto;
-            background-color: rgba(0,0,0,0.4);
+            left: 0; top: 0;
+            width: 100%; height: 100%;
+            background-color: rgba(0,0,0,0.5);
+            backdrop-filter: blur(4px);
+            animation: fadeIn 0.3s;
         }
-
         .modal-content {
             background-color: #fefefe;
-            margin: 15% auto;
-            padding: 20px;
-            border: 1px solid #888;
-            border-radius: 8px;
-            width: 80%;
+            margin: 10% auto;
+            padding: 30px;
+            border-radius: 12px;
+            width: 90%;
             max-width: 500px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+            position: relative;
+            animation: slideDown 0.4s;
         }
-
+        @keyframes slideDown { from {transform: translateY(-50px); opacity: 0;} to {transform: translateY(0); opacity: 1;} }
+        
         .close {
             color: #aaa;
             float: right;
             font-size: 28px;
             font-weight: bold;
-        }
-
-        .close:hover,
-        .close:focus {
-            color: black;
-            text-decoration: none;
             cursor: pointer;
+            transition: color 0.3s;
         }
+        .close:hover { color: #000; }
 
-        #fileInput { display: none; }
-        .upload-btn {
-            background-color: #1976d2;
-            color: white;
+        .upload-area {
+            border: 2px dashed var(--border-color);
+            border-radius: 8px;
+            padding: 20px;
+            text-align: center;
+            margin: 20px 0;
+            transition: all 0.3s;
+            background: #fafafa;
+        }
+        .upload-area:hover { border-color: var(--primary-color); background: #f0f7ff; }
+
+        .btn-modal {
+            display: block;
+            width: 100%;
+            padding: 12px;
             border: none;
-            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 1rem;
+            font-weight: 600;
             cursor: pointer;
-            margin: 5px 0;
-        }
-        .upload-btn:hover { background-color: #1565c0; }
-
-        /* --- NOVO: Estilo para o botão PIX (agora é "Realizar Pagamento") --- */
-        .btn-pagamento {
-            display: inline-block;
-            background-color: #2e7d32; /* Verde Escuro */
-            color: white;
-            padding: 10px 20px;
-            text-decoration: none;
-            border-radius: 4px;
             margin-top: 10px;
-            font-weight: bold;
-            transition: background-color 0.3s;
-            width: auto; /* Permite que o botão cresça com o texto */
+            transition: all 0.3s;
         }
-        .btn-pagamento:hover {
-            background-color: #1b5e20; /* Verde mais escuro no hover */
+        .btn-upload { background-color: var(--primary-color); color: white; }
+        .btn-upload:hover { background-color: var(--primary-dark); }
+        .btn-send { background-color: var(--success-color); color: white; margin-top: 15px; }
+        .btn-send:hover { background-color: #1b5e20; }
+        .btn-cancel { background-color: #f5f5f5; color: #555; margin-top: 10px; }
+        .btn-cancel:hover { background-color: #e0e0e0; }
+
+        #previewContainer { margin-top: 15px; text-align: center; }
+        #previewContainer img { max-width: 150px; max-height: 150px; border-radius: 6px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes fadeInUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* Responsividade */
+        @media (max-width: 600px) {
+            .content { padding: 20px; }
+            .header { padding: 30px 15px; }
+            .header h2 { font-size: 1.6rem; }
+            .status-info-grid { grid-template-columns: 1fr; }
+            th, td { padding: 10px; font-size: 0.9rem; }
+            .btn-pagamento { width: 100%; text-align: center; }
         }
-        /* --- FIM NOVO --- */
     </style>
 </head>
 <body>
-    <div class="container">
-        <h2>Acompanhar Minha Inscrição</h2>
 
-        <?php if ($resultado): ?>
-            <div class="status-box">
-                <h3>Olá, <?= htmlspecialchars($resultado['nome']) ?>!</h3>
-                <p><strong>Código da Inscrição:</strong> <?= htmlspecialchars($resultado['codigo_inscricao']) ?></p>
-                <p><strong>Matrícula:</strong> <?= htmlspecialchars($resultado['matricula']) ?></p>
-                <p><strong>Status Atual:</strong>
-                    <span class="status-<?= $resultado['situacao'] ?>">
-                        <?= ucfirst(str_replace('_', ' ', $resultado['situacao'])) ?>
-                    </span>
-                </p>
-            <!-- Mensagens orientativas -->
-            <?php
-            switch ($resultado['situacao']) {
-                case 'aguardando_validacao':
-                    echo '<p style="color:#f57c00;">Sua inscrição foi recebida e está em análise. Aguarde a validação dos dados e documentos.</p>';
-                    break;
-                case 'dados_aprovados':
-                    echo '<p style="color:#f57c00;">Seus dados foram aprovados. Aguarde instruções para pagamento.</p>';
-                    break;
-                case 'pagamento_pendente':
-                    echo '<p style="color:#f57c00;">Seus dados foram aprovados. Aguarde confirmação do pagamento.</p>';
-                    break;
-                case 'documentos_anexados':
-                    echo '<p style="color:#5d4037;">Documentos recebidos. Aguardando confirmação de pagamento.</p>';
-                    break;
-                case 'pago':
-                    echo '<p style="color:#2e7d32;">Pagamento confirmado! Sua CIE está sendo preparada para emissão.</p>';
-                    break;
-                case 'cie_emitida_aguardando_entrega':
-                    echo '<p style="color:#5d4037;"><strong>Sua CIE foi emitida!</strong> Agora está aguardando logística de entrega para a instituição.</p>';
-                    break;
-                case 'cie_entregue_na_instituicao':
-                    echo '<p style="color:#2e7d32;"><strong>Sua CIE foi entregue na instituição!</strong> Entre em contato com a secretaria para retirada.</p>';
-                    break;
-                default:
-                    echo '<p>Em processamento...</p>';
-            }
-            ?>
+    <div class="main-container">
+        <div class="header">
+            <h2>Acompanhar Minha Inscrição</h2>
+            <p>Consulte o status da sua Carteira Estudantil (CIE)</p>
+        </div>
 
-            <!-- Botão de Pagamento (Regra Final: Disponível sempre que a inscrição existir e o pagamento não for confirmado) -->
-            <?php if (!$resultado['pagamento_confirmado'] && $resultado['situacao'] !== 'pago' && $resultado['situacao'] !== 'cie_emitida_aguardando_entrega' && $resultado['situacao'] !== 'cie_entregue_na_instituicao'): ?>
-                <a href="pagamento_mp.php?codigo=<?= urlencode($resultado['codigo_inscricao']) ?>&data_nascimento=<?= urlencode($resultado['data_nascimento']) ?>" class="btn-pagamento">Realizar Pagamento</a>
-            <?php elseif ($resultado['pagamento_confirmado'] && in_array($resultado['situacao'], ['aguardando_validacao', 'dados_aprovados', 'pagamento_pendente', 'documentos_anexados'])): ?>
-                <p style="color:#2e7d32;">Pagamento confirmado. Aguarde a atualização automática do status da inscrição.</p>
-            <?php endif; ?>
+        <div class="content">
+            <?php if ($resultado): ?>
+                <!-- Card de Status -->
+                <div class="status-card">
+                    <h3>Olá, <?= htmlspecialchars($resultado['nome']) ?>!</h3>
+                    
+                    <div class="status-info-grid">
+                        <div class="status-info-item">
+                            <strong>Código da Inscrição</strong>
+                            <span><?= htmlspecialchars($resultado['codigo_inscricao']) ?></span>
+                        </div>
+                        <div class="status-info-item">
+                            <strong>Matrícula</strong>
+                            <span><?= htmlspecialchars($resultado['matricula']) ?></span>
+                        </div>
+                        <div class="status-info-item">
+                            <strong>Status Atual</strong>
+                            <br>
+                            <span class="status-badge status-<?= $resultado['situacao'] ?>">
+                                <?= ucfirst(str_replace('_', ' ', $resultado['situacao'])) ?>
+                            </span>
+                        </div>
+                    </div>
 
-            <!-- Seção de Documentos -->
-            <?php if (!empty($documentos)): ?>
-                <h3>Seus Documentos</h3>
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Documento</th>
-                            <th>Tipo</th>
-                            <th>Status</th>
-                            <th>Observação</th>
-                            <th>Visualizar</th>
-                            <th>Ações</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <?php foreach ($documentos as $doc): ?>
-                        <tr>
-                            <td><?= htmlspecialchars($doc['descricao']) ?></td>
-                            <td><?= htmlspecialchars(ucfirst(str_replace('_', ' ', $doc['tipo']))) ?></td>
-                            <td>
-                                <span class="status-<?= $doc['validado'] ?>">
-                                    <?= ucfirst($doc['validado']) ?>
-                                </span>
-                            </td>
-                            <td>
-                                <?php if ($doc['validado'] === 'invalido' && !empty($doc['observacoes_validacao'])): ?>
-                                    <strong style="color: #c62828;">Solicitação de Reenvio:</strong><br>
-                                    <?= htmlspecialchars($doc['observacoes_validacao']) ?>
-                                <?php elseif (!empty($doc['observacoes_validacao'])): ?>
-                                    <?= htmlspecialchars($doc['observacoes_validacao']) ?>
-                                <?php else: ?>
-                                    —
-                                <?php endif; ?>
-                            </td>
-                            <td>
-                                <a href="public/<?= htmlspecialchars($doc['caminho_arquivo']) ?>" target="_blank">Ver</a>
-                            </td>
-                            <td>
-                                <?php if ($doc['validado'] === 'invalido'): ?>
-                                    <button class="btn-reenviar" onclick="abrirModalReenvio(<?= $doc['id'] ?>, '<?= addslashes(htmlspecialchars($doc['descricao'])) ?>')">Reenviar</button>
-                                <?php else: ?>
-                                    —
-                                <?php endif; ?>
-                            </td>
-                        </tr>
-                        <?php endforeach; ?>
-                    </tbody>
-                </table>
-                <p><small>Se algum documento tiver status <span class="status-invalido">Inválido</span>, você pode reenviá-lo usando o botão "Reenviar".</small></p>
+                    <!-- Mensagens Orientativas -->
+                    <div class="status-message">
+                        <?php
+                        switch ($resultado['situacao']) {
+                            case 'aguardando_validacao':
+                                echo 'Sua inscrição foi recebida e está em análise. Aguarde a validação dos dados e documentos.';
+                                break;
+                            case 'dados_aprovados':
+                                echo 'Seus dados foram aprovados. Aguarde instruções para pagamento.';
+                                break;
+                            case 'pagamento_pendente':
+                                echo 'Seus dados foram aprovados. Realize o pagamento para continuar.';
+                                break;
+                            case 'documentos_anexados':
+                                echo 'Documentos recebidos. Aguardando confirmação de pagamento.';
+                                break;
+                            case 'pago':
+                                echo '<strong>Pagamento confirmado!</strong> Sua CIE está sendo preparada para emissão.';
+                                break;
+                            case 'cie_emitida_aguardando_entrega':
+                                echo '<strong>Sua CIE foi emitida!</strong> Agora está aguardando logística de entrega para a instituição.';
+                                break;
+                            case 'cie_entregue_na_instituicao':
+                                echo '<strong>Sua CIE foi entregue na instituição!</strong> Entre em contato com a secretaria para retirada.';
+                                break;
+                            default:
+                                echo 'Em processamento...';
+                        }
+                        ?>
+                    </div>
+
+                    <!-- Botão de Pagamento -->
+                    <?php if (!$resultado['pagamento_confirmado'] && !in_array($resultado['situacao'], ['pago', 'cie_emitida_aguardando_entrega', 'cie_entregue_na_instituicao'])): ?>
+                        <a href="pagamento_mp.php?codigo=<?= urlencode($resultado['codigo_inscricao']) ?>&data_nascimento=<?= urlencode($resultado['data_nascimento']) ?>" class="btn-pagamento">
+                            💳 Realizar Pagamento
+                        </a>
+                    <?php elseif ($resultado['pagamento_confirmado'] && in_array($resultado['situacao'], ['aguardando_validacao', 'dados_aprovados', 'pagamento_pendente', 'documentos_anexados'])): ?>
+                        <p style="color: var(--success-color); font-weight: 600; margin-top: 15px;">
+                            ✅ Pagamento confirmado. Aguarde a atualização automática do status.
+                        </p>
+                    <?php endif; ?>
+                </div>
+
+                <!-- Seção de Documentos -->
+                <div class="docs-section">
+                    <h3>📄 Seus Documentos</h3>
+                    <?php if (!empty($documentos)): ?>
+                        <div class="table-responsive">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Documento</th>
+                                        <th>Tipo</th>
+                                        <th>Status</th>
+                                        <th>Observação</th>
+                                        <th>Visualizar</th>
+                                        <th>Ações</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <?php foreach ($documentos as $doc): ?>
+                                    <tr>
+                                        <td><?= htmlspecialchars($doc['descricao']) ?></td>
+                                        <td><?= htmlspecialchars(ucfirst(str_replace('_', ' ', $doc['tipo']))) ?></td>
+                                        <td>
+                                            <span class="doc-status-badge status-<?= $doc['validado'] ?>">
+                                                <?= ucfirst($doc['validado']) ?>
+                                            </span>
+                                        </td>
+                                        <td>
+                                            <?php if ($doc['validado'] === 'invalido' && !empty($doc['observacoes_validacao'])): ?>
+                                                <span style="color: var(--error-color); font-size: 0.9em;">
+                                                    <strong>⚠️ Reenvio:</strong><br>
+                                                    <?= htmlspecialchars($doc['observacoes_validacao']) ?>
+                                                </span>
+                                            <?php elseif (!empty($doc['observacoes_validacao'])): ?>
+                                                <span style="font-size: 0.9em; color: #666;"><?= htmlspecialchars($doc['observacoes_validacao']) ?></span>
+                                            <?php else: ?>
+                                                <span style="color: #ccc;">—</span>
+                                            <?php endif; ?>
+                                        </td>
+                                        <td>
+                                            <a href="public/<?= htmlspecialchars($doc['caminho_arquivo']) ?>" target="_blank" class="btn-ver">️ Ver</a>
+                                        </td>
+                                        <td>
+                                            <?php if ($doc['validado'] === 'invalido'): ?>
+                                                <button class="btn-reenviar" onclick="abrirModalReenvio(<?= $doc['id'] ?>, '<?= addslashes(htmlspecialchars($doc['descricao'])) ?>')">
+                                                    🔄 Reenviar
+                                                </button>
+                                            <?php else: ?>
+                                                <span style="color: #ccc;">—</span>
+                                            <?php endif; ?>
+                                        </td>
+                                    </tr>
+                                    <?php endforeach; ?>
+                                </tbody>
+                            </table>
+                        </div>
+                        <p style="margin-top: 15px; font-size: 0.9em; color: var(--light-text);">
+                            ℹ️ Se algum documento estiver marcado como <strong style="color: var(--error-color);">Inválido</strong>, utilize o botão "Reenviar" para enviar um novo arquivo.
+                        </p>
+                    <?php else: ?>
+                        <p style="text-align: center; color: var(--light-text); padding: 20px; background: #f9f9f9; border-radius: 8px;">
+                            Nenhum documento foi anexado à sua inscrição ainda.
+                        </p>
+                    <?php endif; ?>
+                </div>
+
+                <div style="text-align: center;">
+                    <a href="index.php" class="back-link">← Voltar para a página inicial</a>
+                </div>
+
             <?php else: ?>
-                <h3>Seus Documentos</h3>
-                <p>Nenhum documento foi anexado à sua inscrição ainda.</p>
-            <?php endif; ?>
-            <!-- Fim Seção de Documentos -->
+                <!-- Formulário de Consulta -->
+                <?php if ($erro): ?>
+                    <div class="erro">
+                        <strong>⚠️ Atenção:</strong> <?= htmlspecialchars($erro) ?>
+                    </div>
+                <?php endif; ?>
 
-            <a href="index.php">← Voltar ao início</a>
-        <?php else: ?>
-            <?php if ($erro): ?>
-                <div class="erro"><?= htmlspecialchars($erro) ?></div>
-            <?php endif; ?>
+                <form method="POST" class="search-form">
+                    <div class="form-group">
+                        <label for="codigo">Código de Inscrição *</label>
+                        <input type="text" id="codigo" name="codigo" placeholder="Ex: a1b2c3d4-e5f6..." value="<?= htmlspecialchars($_POST['codigo'] ?? '') ?>" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="data_nascimento">Data de Nascimento *</label>
+                        <input type="date" id="data_nascimento" name="data_nascimento" value="<?= htmlspecialchars($_POST['data_nascimento'] ?? '') ?>" required>
+                    </div>
+                    <button type="submit" class="btn-submit">Consultar Status</button>
+                </form>
 
-            <form method="POST">
-                <div class="form-group">
-                    <label>Código de Inscrição *</label>
-                    <input type="text" name="codigo" placeholder="Ex: a1b2c3d4-e5f6..." value="<?= htmlspecialchars($_POST['codigo'] ?? '') ?>" required>
+                <div style="text-align: center;">
+                    <a href="index.php" class="back-link">← Voltar para a página inicial</a>
                 </div>
-                <div class="form-group">
-                    <label>Data de Nascimento *</label>
-                    <input type="date" name="data_nascimento" value="<?= htmlspecialchars($_POST['data_nascimento'] ?? '') ?>" required>
-                </div>
-                <button type="submit">Consultar Status</button>
-            </form>
-            <a href="index.php">← Voltar ao início</a>
-        <?php endif; ?>
+            <?php endif; ?>
+        </div>
     </div>
 
     <!-- Modal de Reenvio -->
     <div id="modal_reenvio" class="modal">
         <div class="modal-content">
-            <span class="close" onclick="fecharModal()">×</span>
-            <h3 id="titulo_modal_reenvio">Reenviar: <span id="nome_doc_reenvio"></span></h3>
-            <p>Selecione um novo arquivo para este documento.</p>
-            <input type="file" id="fileInput" accept=".jpg,.jpeg,.png,.pdf" onchange="previewFile()">
-            <button class="upload-btn" onclick="document.getElementById('fileInput').click()">Escolher Arquivo</button>
-            <div id="previewContainer" style="margin-top: 10px;"></div>
-            <button class="upload-btn" onclick="enviarReenvio()" style="background-color: #2e7d32;">Enviar Reenvio</button>
-            <button class="upload-btn" onclick="fecharModal()" style="background-color: #555; margin-top: 10px;">Cancelar</button>
+            <span class="close" onclick="fecharModal()">&times;</span>
+            <h3 id="titulo_modal_reenvio" style="color: var(--primary-color); margin-bottom: 10px;">Reenviar Documento</h3>
+            <p style="color: var(--light-text);">Documento: <strong id="nome_doc_reenvio"></strong></p>
+            
+            <div class="upload-area" onclick="document.getElementById('fileInput').click()">
+                <p style="margin-bottom: 10px; font-weight: 500;">Clique para selecionar o arquivo</p>
+                <input type="file" id="fileInput" accept=".jpg,.jpeg,.png,.pdf" onchange="previewFile()" style="display: none;">
+                <div id="previewContainer"></div>
+            </div>
+            
+            <button class="btn-modal btn-upload" onclick="document.getElementById('fileInput').click()">
+                📁 Escolher Arquivo
+            </button>
+            <button class="btn-modal btn-send" onclick="enviarReenvio()">
+                ✅ Enviar Reenvio
+            </button>
+            <button class="btn-modal btn-cancel" onclick="fecharModal()">
+                Cancelar
+            </button>
         </div>
     </div>
 
@@ -298,12 +655,12 @@ if ($_POST) {
             docIdReenvio = id;
             document.getElementById('nome_doc_reenvio').textContent = nome;
             document.getElementById('modal_reenvio').style.display = 'block';
+            document.getElementById('previewContainer').innerHTML = '';
+            document.getElementById('fileInput').value = '';
         }
 
         function fecharModal() {
             document.getElementById('modal_reenvio').style.display = 'none';
-            document.getElementById('fileInput').value = '';
-            document.getElementById('previewContainer').innerHTML = '';
         }
 
         function previewFile() {
@@ -315,9 +672,9 @@ if ($_POST) {
                 const reader = new FileReader();
                 reader.onload = function(e) {
                     if (file.type.startsWith('image/')) {
-                        container.innerHTML = `<img src="${e.target.result}" style="max-width: 100px; max-height: 100px;">`;
+                        container.innerHTML = `<img src="${e.target.result}" alt="Preview">`;
                     } else {
-                        container.innerHTML = `<span>${file.name}</span>`;
+                        container.innerHTML = `<p style="font-weight:500; color:var(--primary-color);">📄 ${file.name}</p>`;
                     }
                 };
                 reader.readAsDataURL(file);
@@ -331,46 +688,51 @@ if ($_POST) {
             const file = fileInput.files[0];
 
             if (!file) {
-                alert('Por favor, selecione um arquivo.');
+                alert('Por favor, selecione um arquivo antes de enviar.');
                 return;
             }
 
-            // Converter o arquivo para base64
             const reader = new FileReader();
             reader.onload = function(e) {
-                const base64Data = e.target.result.split(',')[1]; // Remove o cabeçalho "data:..."
                 const dados = {
                     doc_id: docIdReenvio,
-                    arquivo: e.target.result // Enviar o data URL completo
+                    arquivo: e.target.result
                 };
+
+                // Feedback visual de envio
+                const btnSend = document.querySelector('.btn-send');
+                const originalText = btnSend.textContent;
+                btnSend.textContent = '⏳ Enviando...';
+                btnSend.disabled = true;
 
                 fetch('public/reenviar_documento.php', {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
+                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(dados)
                 })
                 .then(response => response.json())
                 .then(data => {
                     if (data.success) {
-                        alert(data.message);
+                        alert('✅ ' + data.message);
                         fecharModal();
-                        // Opcional: Recarregar a página para atualizar a lista de documentos
-                        // location.reload();
+                        location.reload(); // Recarrega para mostrar o novo status
                     } else {
-                        alert(data.message || 'Erro ao reenviar documento.');
+                        alert('❌ Erro: ' + (data.message || 'Falha ao reenviar documento.'));
+                        btnSend.textContent = originalText;
+                        btnSend.disabled = false;
                     }
                 })
                 .catch(error => {
                     console.error('Erro:', error);
-                    alert('Erro de rede ou servidor.');
+                    alert('❌ Erro de conexão. Tente novamente.');
+                    btnSend.textContent = originalText;
+                    btnSend.disabled = false;
                 });
             };
             reader.readAsDataURL(file);
         }
 
-        // Fecha modal se clicar fora dela
+        // Fecha modal se clicar fora
         window.onclick = function(event) {
             const modal = document.getElementById('modal_reenvio');
             if (event.target === modal) {

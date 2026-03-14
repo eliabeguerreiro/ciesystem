@@ -1,10 +1,10 @@
 <?php
 // config/database.php
 class Database {
-    private $host = '127.0.0.1:3306';
+    private $host = '127.0.0.1:3333';
     private $db_name = 'ciesytem';
-    private $username = 'ciesistem';      // ajuste conforme seu ambiente
-    private $password = 'Pass@ciesistem2026';          // ajuste conforme seu ambiente
+    private $username = 'root';      // ajuste conforme seu ambiente
+    private $password = 'hants12';          // ajuste conforme seu ambiente
     public $conn;
 
     public function getConnection() {
